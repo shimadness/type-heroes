@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { JoinProfile } from "../game/room";
 import type { Difficulty } from "../typing/words";
-import { DIFF_LABEL } from "../typing/words";
 import { ROLES } from "../game/data";
 import type { RoleId } from "../game/types";
 import { alienFor, enAsset } from "../assets";
@@ -13,11 +12,10 @@ interface Props {
   onJoin: (pw: string, profile: JoinProfile) => void;
   onSpectate: (pw: string) => void;
   onRanking: () => void;
+  onTutorial: () => void;
 }
 
 type Mode = "menu" | "solo" | "create" | "join" | "spectate";
-
-const DIFFS: Difficulty[] = ["easy", "normal", "hard", "oni"];
 
 export function Title(p: Props) {
   const [mode, setMode] = useState<Mode>("menu");
@@ -26,7 +24,9 @@ export function Title(p: Props) {
   );
   const [pw, setPw] = useState("");
   const [role, setRole] = useState<RoleId>("attacker");
-  const [diff, setDiff] = useState<Difficulty>("normal");
+  // 難易度はロビーで決める（ここで選ばせるとロビーの設定と二重になる）。
+  // これはその初期値でしかない。
+  const diff: Difficulty = "normal";
   const [busy, setBusy] = useState(false);
 
   const profile = (): JoinProfile => {
@@ -64,6 +64,9 @@ export function Title(p: Props) {
 
       {mode === "menu" && (
         <div className="menu-buttons">
+          <button className="btn big tutorial-btn" onClick={p.onTutorial}>
+            🎓 あそびかた
+          </button>
           <button className="btn big" onClick={() => setMode("create")}>
             🏰 へやをつくる
           </button>
@@ -116,27 +119,6 @@ export function Title(p: Props) {
                 </div>
               </div>
 
-              <div className="field">
-                <span>
-                  {mode === "join" ? "じぶんの出題難易度" : "難易度"}
-                </span>
-                <div className="diff-row">
-                  {DIFFS.map((d) => (
-                    <button
-                      key={d}
-                      className={`diff-btn diff-${d} ${diff === d ? "sel" : ""}`}
-                      onClick={() => setDiff(d)}
-                    >
-                      {DIFF_LABEL[d]}
-                    </button>
-                  ))}
-                </div>
-                {mode === "join" && (
-                  <div className="role-desc">
-                    ※敵の強さは部屋主の難易度。これは自分に出る問題のむずかしさ（ハンデ）だよ
-                  </div>
-                )}
-              </div>
             </>
           )}
 

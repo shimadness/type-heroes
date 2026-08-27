@@ -889,6 +889,125 @@ body {
   to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
+/* ---------- チュートリアル ---------- */
+.tutorial-btn {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.tutorial-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tutorial-steps {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.tut-step {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  color: var(--sub);
+  background: var(--panel);
+}
+.tut-step.cur {
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: 0 0 10px rgba(255, 213, 74, 0.4);
+}
+.tut-step.done {
+  border-color: var(--hp);
+  color: var(--hp);
+}
+.tut-step.done::before {
+  content: "✓ ";
+}
+.tut-skip {
+  font-size: 13px;
+  padding: 5px 12px;
+}
+
+.tutorial-hint {
+  text-align: center;
+  background: var(--panel);
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin: 8px auto 0;
+  max-width: min(680px, 94vw);
+  animation: popin 0.3s ease-out;
+}
+.tut-hint-main {
+  font-size: 18px;
+  color: var(--gold);
+}
+.tut-hint-sub {
+  font-size: 12px;
+  color: var(--sub);
+  margin-top: 4px;
+}
+
+/* 「ここを押してほしい」を光らせて示す（テキストで説明しない） */
+.mode-btn.want {
+  animation: pulse 0.8s infinite;
+  border-color: var(--heal);
+  color: var(--heal);
+}
+.word-card.tut-want {
+  animation: pulse 0.9s infinite;
+}
+.tut-waiting,
+.tut-nudge {
+  color: var(--gold);
+  font-size: 14px;
+  text-align: center;
+  padding: 8px;
+  animation: bob 1.2s ease-in-out infinite;
+}
+.tut-ok {
+  text-align: center;
+  color: var(--hp);
+  font-size: 20px;
+  margin-top: 8px;
+  animation: popin 0.3s ease-out;
+}
+
+.tutorial-done-screen {
+  gap: 18px;
+  background: radial-gradient(ellipse at 50% -10%, #2a2154 0%, transparent 55%), var(--bg);
+}
+/* Press Start 2P は日本語グリフを持たず細い等幅にフォールバックして潰れるので、
+   日本語見出しはドット系の和文フォントで描く */
+.tutorial-done-screen .clear-title {
+  font-family: "DotGothic16", sans-serif;
+  font-size: clamp(22px, 5vw, 34px);
+}
+.tutorial-summary {
+  background: var(--panel);
+  border: 2px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  max-width: min(560px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tut-sum-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.tut-sum-row > span:first-child {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
 /* ---------- ステージクリア / リザルト ---------- */
 .stageclear-screen {
   gap: 18px;

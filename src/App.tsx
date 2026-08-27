@@ -11,6 +11,7 @@ import { Battle } from "./screens/Battle";
 import { StageClear } from "./screens/StageClear";
 import { Result } from "./screens/Result";
 import { Ranking } from "./screens/Ranking";
+import { Tutorial } from "./screens/Tutorial";
 
 export interface Session {
   store: Store;
@@ -29,6 +30,7 @@ function friendlyError(e: unknown): string {
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [showRanking, setShowRanking] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
   const [error, setError] = useState("");
   const state = useRoom(session?.room ?? null);
 
@@ -94,6 +96,10 @@ export default function App() {
     setSession(null);
   }, [session]);
 
+  if (showTutorial) {
+    return <Tutorial onExit={() => setShowTutorial(false)} />;
+  }
+
   if (showRanking) {
     return <Ranking onBack={() => setShowRanking(false)} />;
   }
@@ -107,6 +113,7 @@ export default function App() {
         onJoin={joinRoom}
         onSpectate={spectateRoom}
         onRanking={() => setShowRanking(true)}
+        onTutorial={() => setShowTutorial(true)}
       />
     );
   }

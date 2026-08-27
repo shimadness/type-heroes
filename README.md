@@ -1,5 +1,8 @@
 # TYPE HEROES 〜みんなでタイピングクエスト〜
 
+▶ **あそぶ: https://shimadness.github.io/type-heroes/**
+
+
 チームで協力してステージをクリアしていくタイピングRPG。
 正しい打鍵で敵にダメージ、ワード完了で大ダメージ。攻撃と回復を切り替えながら、
 みんなで「はじまりの森」→「こだまの洞窟」→「まおうの城」を攻略する。
@@ -41,11 +44,22 @@ npm run dev    # 開発サーバー
 npm run build  # 型チェック + ビルド（dist/）
 ```
 
+## デプロイ
+
+main に push すると GitHub Actions がビルドして GitHub Pages に公開される（`.github/workflows/deploy.yml`）。
+
 ## Firebase（マルチプレイ）
 
 - RTDB は TWINKLE DROP RUSH と同じ `triple-slot-ranking` プロジェクトを共用。
 - パス: `typing/rooms/{あいことば}` / `typing/ranking/{難易度}`
-- **初回のみ**: `docs/rtdb-rules.json` の内容を Firebase コンソール > Realtime Database > ルール に貼り付けて公開すること（`typing` ブロックが追加されるまでマルチプレイは動かない。「ひとりで特訓」は動く）。
+- **ルールは適用済み**（2026-08-27）。マルチプレイ・ランキングとも稼働中。
+- ルールを変更するときは `database.rules.json` を編集して以下を実行する。
+  このファイルは TWINKLE の `drop`/`slot`/`events`/`appmeta` も含む**DB全体のルール**なので、
+  他アプリのブロックを消さないよう注意すること。
+
+  ```bash
+  npx firebase-tools deploy --only database --project triple-slot-ranking
+  ```
 
 ## 実装メモ
 

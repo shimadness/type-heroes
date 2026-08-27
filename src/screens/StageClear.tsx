@@ -3,6 +3,7 @@ import type { Session } from "../App";
 import type { RoomState } from "../game/types";
 import { ENEMY_KINDS, STAGES, equipDef, roleDef } from "../game/data";
 import { enAsset } from "../assets";
+import { fireAndForget } from "../net/store";
 import { HostBrain } from "../game/host";
 import { allPlayers } from "../game/room";
 
@@ -61,7 +62,7 @@ export function StageClear({ session, state }: Props) {
       )}
 
       {isHost ? (
-        <button className="btn big primary" onClick={() => brain.nextStage(state)}>
+        <button className="btn big primary" onClick={() => fireAndForget("次ステージへ", brain.nextStage(state))}>
           つぎのステージへ すすむ！
         </button>
       ) : (

@@ -6,6 +6,7 @@ import { DIFF_LABEL, type Difficulty } from "../typing/words";
 import { HostBrain } from "../game/host";
 import { allPlayers } from "../game/room";
 import { alienFor } from "../assets";
+import { fireAndForget } from "../net/store";
 
 interface Props {
   session: Session;
@@ -68,7 +69,7 @@ export function Lobby({ session, state, onLeave }: Props) {
                   <button
                     key={r.id}
                     className={`role-card ${me.role === r.id ? "sel" : ""}`}
-                    onClick={() => room.setProfile({ role: r.id })}
+                    onClick={() => fireAndForget("ロール変更", room.setProfile({ role: r.id }))}
                     title={r.desc}
                   >
                     <span className="role-icon">{r.icon}</span>
@@ -86,7 +87,7 @@ export function Lobby({ session, state, onLeave }: Props) {
                   <button
                     key={d}
                     className={`diff-btn diff-${d} ${me.diff === d ? "sel" : ""}`}
-                    onClick={() => room.setProfile({ diff: d })}
+                    onClick={() => fireAndForget("難易度変更", room.setProfile({ diff: d }))}
                   >
                     {DIFF_LABEL[d]}
                   </button>
@@ -102,7 +103,7 @@ export function Lobby({ session, state, onLeave }: Props) {
                     <button
                       key={d}
                       className={`diff-btn diff-${d} ${state.meta.diff === d ? "sel" : ""}`}
-                      onClick={() => room.setTeamDiff(d)}
+                      onClick={() => fireAndForget("チーム難易度変更", room.setTeamDiff(d))}
                     >
                       {DIFF_LABEL[d]}
                     </button>
@@ -121,7 +122,7 @@ export function Lobby({ session, state, onLeave }: Props) {
         {!isHost && me && (
           <button
             className={`btn big ${me.ready ? "" : "primary"}`}
-            onClick={() => room.setProfile({ ready: !me.ready })}
+            onClick={() => fireAndForget("じゅんびOK", room.setProfile({ ready: !me.ready }))}
           >
             {me.ready ? "じゅんびOKをとりけす" : "じゅんびOK！"}
           </button>
@@ -130,7 +131,7 @@ export function Lobby({ session, state, onLeave }: Props) {
           <button
             className="btn big primary"
             disabled={!everyoneReady}
-            onClick={() => brain.startGame(state)}
+            onClick={() => fireAndForget("ゲーム開始", brain.startGame(state))}
           >
             ⚔️ ぼうけんに出発！
             {!everyoneReady && <span className="btn-note">（全員のじゅんびOK待ち）</span>}

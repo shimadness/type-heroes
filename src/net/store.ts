@@ -7,6 +7,16 @@
 
 export type Unsubscribe = () => void;
 
+/**
+ * 結果を待たない書き込み用。失敗しても画面は止めず、原因が分かる形でログに残す。
+ * （通信断・ルール違反を Uncaught (in promise) の不明なエラーにしないため）
+ */
+export function fireAndForget(label: string, p: Promise<unknown>): void {
+  p.catch((e) => {
+    console.warn(`[TYPE HEROES] 書き込み失敗: ${label}`, e);
+  });
+}
+
 export interface Store {
   read(path: string): Promise<unknown>;
   write(path: string, value: unknown): Promise<void>;

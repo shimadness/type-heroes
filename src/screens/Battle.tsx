@@ -31,6 +31,7 @@ import {
   type GenreId,
 } from "../typing/words";
 import { sfx } from "../sfx";
+import { fireAndForget } from "../net/store";
 import { alienFor, enAsset } from "../assets";
 
 interface Props {
@@ -224,7 +225,7 @@ export function Battle({ session, state, onLeave }: Props) {
         const baseDmg = ev?.dmg ?? 10;
         const mult = Room.takenMult(myself) * (card.defended ? 0.5 : 1);
         const dmg = Math.max(1, Math.round(baseDmg * mult));
-        room.damageSelf(dmg);
+        fireAndForget("被ダメージ適用", room.damageSelf(dmg));
         sfx.hurt();
         doShake();
         addFloat(
@@ -338,7 +339,10 @@ export function Battle({ session, state, onLeave }: Props) {
             "enemy"
           );
           if (killed && kind?.boss) {
-            room.pushEvent({ type: "info", text: `🎉 ${kind.win}`, at: Date.now() } as never);
+            fireAndForget(
+              "ボス撃破メッセージ",
+              room.pushEvent({ type: "info", text: `🎉 ${kind.win}`, at: Date.now() } as never)
+            );
           }
           if (killed) sfx.kill();
           else if (crit) sfx.crit();
@@ -365,8 +369,8 @@ export function Battle({ session, state, onLeave }: Props) {
       // ゲージ・バフ
       const gaugeGain =
         TUNING.gaugePerWord * (myself.equip === "boots" ? 1.3 : 1);
-      room.addGauge(gaugeGain);
-      if (roleDef(myself.role).buffOnWord) room.applyBuff();
+      fireAndForget("ユニゾンゲージ加算", room.addGauge(gaugeGain));
+      if (roleDef(myself.role).buffOnWord) fireAndForget("応援バフ", room.applyBuff());
 
       // カード入れ替え
       genreCardsRef.current = genreCardsRef.current.map((c) =>
@@ -432,7 +436,7 @@ export function Battle({ session, state, onLeave }: Props) {
         }
         if (word.finished) {
           if (unisonTyping) {
-            room.unisonDone();
+            fireAndForget("ユニゾン入力完了", room.unisonDone());
             sfx.crit();
           } else if (activeCard) {
             completeWord(activeCard);
@@ -466,7 +470,8 @@ export function Battle({ session, state, onLeave }: Props) {
         pendingDmg.current = 0;
         statsDelta.current.damage += dmg;
         const enemy = (s.enemies ?? {})[targetKey];
-        if (enemy?.alive) room.damageEnemy(Number(targetKey), dmg);
+        if (enemy?.alive)
+          fireAndForget("打鍵ダメージ", room.damageEnemy(Number(targetKey), dmg));
       }
       if (pendingHeal.current >= 1) {
         const amount = Math.round(pendingHeal.current);
@@ -474,13 +479,13 @@ export function Battle({ session, state, onLeave }: Props) {
         statsDelta.current.heal += amount;
         const targets = allPlayers(s).filter(([, p]) => p.alive);
         targets.sort((a, b) => a[1].hp / a[1].maxHp - b[1].hp / b[1].maxHp);
-        if (targets[0]) room.healPlayer(targets[0][0], amount);
+        if (targets[0]) fireAndForget("打鍵回復", room.healPlayer(targets[0][0], amount));
       }
     }, 700);
     const statsIv = setInterval(() => {
       const d = statsDelta.current;
       if (d.damage || d.heal || d.typed || d.miss || d.words || d.defended || d.revived || d.maxCombo) {
-        room.flushStats({ ...d });
+        fireAndForget("スタッツ送信", room.flushStats({ ...d }));
         statsDelta.current = {
           damage: 0, heal: 0, typed: 0, miss: 0, words: 0,
           defended: 0, revived: 0, maxCombo: 0,
@@ -497,7 +502,7 @@ export function Battle({ session, state, onLeave }: Props) {
   useEffect(() => {
     if (!isHost) return;
     const iv = setInterval(() => {
-      brain.tick(stateRef.current).catch(() => {});
+      fireAndForget("ホスト進行", brain.tick(stateRef.current));
     }, 500);
     return () => clearInterval(iv);
   }, [isHost, brain]);
@@ -585,7 +590,7 @@ export function Battle({ session, state, onLeave }: Props) {
             disabled={gauge < 100 || !!unison?.active || isSpectator}
             onClick={() => {
               const w = pickUnison();
-              room.triggerUnison(w.d, w.k);
+              fireAndForget("ユニゾン発動", room.triggerUnison(w.d, w.k));
             }}
           >
             ✨ユニゾン

@@ -5,6 +5,7 @@ import { ENEMY_KINDS, STAGES, roleDef } from "../game/data";
 import { HostBrain } from "../game/host";
 import { allPlayers } from "../game/room";
 import { alienFor, enAsset } from "../assets";
+import { fireAndForget } from "../net/store";
 
 interface Props {
   session: Session;
@@ -166,7 +167,7 @@ export function Result({ session, state, onLeave }: Props) {
           タイトルへ
         </button>
         {isHost && (
-          <button className="btn primary" onClick={() => brain.backToLobby(state)}>
+          <button className="btn primary" onClick={() => fireAndForget("ロビーに戻る", brain.backToLobby(state))}>
             🏕️ ロビーにもどって もういちど！
           </button>
         )}

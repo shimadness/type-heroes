@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import type { Session } from "../App";
 import type { PlayerState, RoomState } from "../game/types";
-import { roleDef } from "../game/data";
+import { ENEMY_KINDS, STAGES, roleDef } from "../game/data";
 import { HostBrain } from "../game/host";
 import { allPlayers } from "../game/room";
+import { alienFor, enAsset } from "../assets";
 
 interface Props {
   session: Session;
@@ -71,20 +72,41 @@ export function Result({ session, state, onLeave }: Props) {
   const players = allPlayers(state).sort(
     (a, b) => (b[1].stats?.damage ?? 0) - (a[1].stats?.damage ?? 0)
   );
+  // アバターは参加順で固定なので join 順のインデックスを引けるようにしておく
+  const joinIdx = new Map(
+    allPlayers(state)
+      .sort((a, b) => a[1].joinedAt - b[1].joinedAt)
+      .map(([pid], i) => [pid, i])
+  );
   const titles = useMemo(() => awardTitles(players), [players]);
   const brain = useMemo(() => new HostBrain(room), [room]);
   const timeMs = cleared ? state.meta.clearedAt - state.meta.startedAt : 0;
+  const lastStage = STAGES[STAGES.length - 1];
+  const finalBoss = lastStage.waves[lastStage.waves.length - 1]
+    .map((k) => ENEMY_KINDS[k])
+    .find((k) => k?.boss);
 
   return (
     <div className={`screen result-screen center ${cleared ? "win" : "lose"}`}>
       <h1 className="result-title">
         {cleared ? "🏆 ぜんステージクリア！！" : "💀 ぜんめつ…"}
       </h1>
-      {cleared && (
-        <div className="result-time">
-          クリアタイム: <b>{fmtTime(timeMs)}</b>
-          {!session.isLocal && <span className="rank-note">（ランキングに登録したよ）</span>}
-        </div>
+      {cleared && finalBoss && (
+        <>
+          <div className="boss-win-line">
+            <img
+              className="boss-win-sprite"
+              src={enAsset(finalBoss.sprite)}
+              alt=""
+              draggable={false}
+            />
+            <span>{finalBoss.win}</span>
+          </div>
+          <div className="result-time">
+            クリアタイム: <b>{fmtTime(timeMs)}</b>
+            {!session.isLocal && <span className="rank-note">（ランキングに登録したよ）</span>}
+          </div>
+        </>
       )}
       {!cleared && (
         <div className="result-time">もういちど ちからを合わせて挑もう！</div>
@@ -110,7 +132,13 @@ export function Result({ session, state, onLeave }: Props) {
               const acc = t + m > 0 ? Math.round((t / (t + m)) * 100) : 100;
               return (
                 <tr key={pid} className={pid === room.myId ? "me" : ""}>
-                  <td>
+                  <td className="name-cell">
+                    <img
+                      className="avatar"
+                      src={alienFor(joinIdx.get(pid) ?? 0, cleared)}
+                      alt=""
+                      draggable={false}
+                    />
                     {roleDef(p.role).icon} {p.name}
                   </td>
                   <td className="title-cell">

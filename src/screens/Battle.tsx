@@ -31,6 +31,7 @@ import {
   type GenreId,
 } from "../typing/words";
 import { sfx } from "../sfx";
+import { alienFor, enAsset } from "../assets";
 
 interface Props {
   session: Session;
@@ -318,18 +319,27 @@ export function Battle({ session, state, onLeave }: Props) {
       if (mode === "attack") {
         const enemy = (s.enemies ?? {})[targetKey];
         if (enemy?.alive) {
+          const kind = ENEMY_KINDS[enemy.kind];
           const weakness = card.genre === enemy.weakness;
-          const mult = Room.damageMult(myself, s, chainCount, weakness, crit);
+          const wMult = weakness
+            ? kind?.boss
+              ? TUNING.bossWeaknessMult
+              : TUNING.weaknessMult
+            : 1;
+          const mult = Room.damageMult(myself, s, chainCount, wMult, crit);
           const dmg = Math.round(kanaLen * TUNING.wordBonusPerKana * mult + pendingDmg.current);
           pendingDmg.current = 0;
           statsDelta.current.damage += dmg;
           const killed = await room.damageEnemy(Number(targetKey), dmg);
           enemyHitAt.current[targetKey] = Date.now();
           addFloat(
-            `${weakness ? "弱点!" : ""}${crit ? "会心!" : ""} ${dmg}`,
+            `${weakness ? `弱点×${wMult}!` : ""}${crit ? "会心!" : ""} ${dmg}`,
             crit || weakness ? "float-crit" : "float-dmg",
             "enemy"
           );
+          if (killed && kind?.boss) {
+            room.pushEvent({ type: "info", text: `🎉 ${kind.win}`, at: Date.now() } as never);
+          }
           if (killed) sfx.kill();
           else if (crit) sfx.crit();
           else sfx.wordDone();
@@ -413,7 +423,7 @@ export function Battle({ session, state, onLeave }: Props) {
         localSessionStats.current.typed++;
         if (!unisonTyping && activeCard?.kind === "genre") {
           if (mode === "attack") {
-            const m = Room.damageMult(myself, s, 1, false, false);
+            const m = Room.damageMult(myself, s, 1, 1, false);
             pendingDmg.current += TUNING.keyDamage * m;
             enemyHitAt.current[targetKey] = Date.now();
           } else {
@@ -623,7 +633,12 @@ export function Battle({ session, state, onLeave }: Props) {
               disabled={!e.alive}
             >
               {key === targetKey && e.alive && <div className="target-marker">▼ターゲット</div>}
-              <div className="enemy-icon">{e.alive ? kind.icon : "💨"}</div>
+              <img
+                className={`enemy-sprite ${e.alive ? "" : "ko"}`}
+                src={enAsset(kind.sprite)}
+                alt={kind.name}
+                draggable={false}
+              />
               <div className="enemy-name">
                 {kind.boss && "👑"}
                 {kind.name}
@@ -637,7 +652,7 @@ export function Battle({ session, state, onLeave }: Props) {
               {genre && e.alive && (
                 <div className="weakness-chip">
                   弱点:{genre.icon}
-                  {genre.label}
+                  {genre.label} ×{kind.boss ? TUNING.bossWeaknessMult : TUNING.weaknessMult}
                 </div>
               )}
               {tele && (
@@ -659,9 +674,16 @@ export function Battle({ session, state, onLeave }: Props) {
         </div>
       </div>
 
+      {/* ---- 床の装飾（EN ガジェット） ---- */}
+      <div className="deco-strip">
+        {stage.deco.map((d, i) => (
+          <img key={i} src={enAsset(d)} alt="" draggable={false} />
+        ))}
+      </div>
+
       {/* ---- パーティー ---- */}
       <div className="party-area">
-        {players.map(([pid, pl]) => {
+        {players.map(([pid, pl], playerIdx) => {
           const rd = roleDef(pl.role);
           const eq = equipDef(pl.equip);
           const targeted = telegraphs.some(
@@ -678,6 +700,12 @@ export function Battle({ session, state, onLeave }: Props) {
               ].join(" ")}
             >
               <div className="player-head">
+                <img
+                  className="avatar"
+                  src={alienFor(playerIdx, pl.alive && pl.hp / pl.maxHp >= 0.6)}
+                  alt=""
+                  draggable={false}
+                />
                 <span className="player-role">{rd.icon}</span>
                 <span className="player-name">{pl.name}</span>
                 {eq && <span className="player-equip" title={eq.desc}>{eq.icon}</span>}
@@ -749,12 +777,23 @@ export function Battle({ session, state, onLeave }: Props) {
                 {cards.map((c) => {
                   const isActive = activeCard?.id === c.id;
                   const genre = c.kind === "genre" ? GENRES.find((g) => g.id === c.genre) : null;
+                  const targetEnemy = (state.enemies ?? {})[targetKey];
+                  const weakHit =
+                    c.kind === "genre" &&
+                    mode === "attack" &&
+                    targetEnemy?.alive &&
+                    targetEnemy.weakness === (c as GenreCard).genre;
+                  const weakMult = weakHit
+                    ? ENEMY_KINDS[targetEnemy!.kind]?.boss
+                      ? TUNING.bossWeaknessMult
+                      : TUNING.weaknessMult
+                    : 1;
                   const label =
                     c.kind === "defense"
                       ? `🛡️ぼうぎょ! のこり${Math.max(0, Math.ceil(((c as DefenseCard).resolveAt - now) / 1000))}秒`
                       : c.kind === "revive"
                         ? `⛑️そせい: ${state.players?.[(c as ReviveCard).pid]?.name ?? ""}`
-                        : `${genre?.icon}${genre?.label}`;
+                        : `${genre?.icon}${genre?.label}${weakHit ? ` ⚡弱点×${weakMult}` : ""}`;
                   return (
                     <button
                       key={c.id}

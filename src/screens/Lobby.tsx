@@ -5,6 +5,7 @@ import { ROLES, roleDef } from "../game/data";
 import { DIFF_LABEL, type Difficulty } from "../typing/words";
 import { HostBrain } from "../game/host";
 import { allPlayers } from "../game/room";
+import { alienFor } from "../assets";
 
 interface Props {
   session: Session;
@@ -41,8 +42,9 @@ export function Lobby({ session, state, onLeave }: Props) {
       <div className="lobby-body">
         <div className="member-list">
           <h3>パーティーメンバー（{players.length}人）</h3>
-          {players.map(([pid, p]) => (
+          {players.map(([pid, p], idx) => (
             <div key={pid} className={`member-row ${pid === room.myId ? "me" : ""}`}>
+              <img className="avatar" src={alienFor(idx, true)} alt="" draggable={false} />
               <span className="member-role">{roleDef(p.role).icon}</span>
               <span className="member-name">
                 {p.name}

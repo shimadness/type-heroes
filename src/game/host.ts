@@ -66,7 +66,20 @@ export class HostBrain {
     }
     updates["enemies"] = this.buildWave(state, 0, 0, players.length);
     await this.store.update(this.base, updates);
+    await this.pushEncounter(0, 0);
     this.resetSchedules();
+  }
+
+  /** ウェーブ先頭の敵（ボス優先）の遭遇セリフを流す */
+  private async pushEncounter(stageIdx: number, wave: number) {
+    const kinds = STAGES[stageIdx].waves[wave].map((k) => ENEMY_KINDS[k]);
+    const lead = kinds.find((k) => k.boss) ?? kinds[0];
+    if (!lead) return;
+    await this.room.pushEvent({
+      type: "info",
+      text: `${lead.boss ? "⚠️ " : ""}${lead.enc}`,
+      at: Date.now(),
+    } as never);
   }
 
   private buildWave(
@@ -282,17 +295,12 @@ export class HostBrain {
 
     if (wave + 1 < stage.waves.length) {
       // 次ウェーブ
-      const isBossWave = wave + 1 === stage.waves.length - 1;
       await this.store.update(this.base, {
         enemies: this.buildWave(state, stageIdx, wave + 1, playerCount),
         "meta/wave": wave + 1,
         "meta/rage": 0,
       });
-      await this.room.pushEvent({
-        type: "info",
-        text: isBossWave ? "⚠️ ボスが あらわれた！！" : "つぎの てきが あらわれた！",
-        at: Date.now(),
-      } as never);
+      await this.pushEncounter(stageIdx, wave + 1);
       this.resetSchedules();
     } else if (stageIdx + 1 < STAGES.length) {
       // ステージクリア → 装備ドロップ
@@ -351,6 +359,7 @@ export class HostBrain {
       updates[`players/${pid}/alive`] = true;
     }
     await this.store.update(this.base, updates);
+    await this.pushEncounter(stageIdx, 0);
     this.resetSchedules();
   }
 

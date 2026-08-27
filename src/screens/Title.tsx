@@ -4,6 +4,7 @@ import type { Difficulty } from "../typing/words";
 import { DIFF_LABEL } from "../typing/words";
 import { ROLES } from "../game/data";
 import type { RoleId } from "../game/types";
+import { alienFor, enAsset } from "../assets";
 
 interface Props {
   error: string;
@@ -51,7 +52,14 @@ export function Title(p: Props) {
         <h1 className="title-main">
           TYPE <span className="title-accent">HEROES</span>
         </h1>
-        <div className="title-swords">⚔️ 🛡️ 💚 🎺</div>
+        <div className="title-parade">
+          {[0, 1, 2, 3].map((i) => (
+            <img key={i} src={alienFor(i, true)} alt="" draggable={false} />
+          ))}
+          <span className="parade-vs">VS</span>
+          <img src={enAsset("mon-minibug")} alt="" draggable={false} />
+          <img src={enAsset("mon-legacydragon")} alt="" draggable={false} className="parade-boss" />
+        </div>
       </div>
 
       {mode === "menu" && (

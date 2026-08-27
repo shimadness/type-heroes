@@ -174,11 +174,43 @@ body {
 .title-accent {
   color: var(--gold);
 }
-.title-swords {
-  font-size: 24px;
-  margin-top: 12px;
-  letter-spacing: 10px;
+.title-parade {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
   animation: bob 2.4s ease-in-out infinite;
+}
+.title-parade img {
+  width: 40px;
+  height: 40px;
+  image-rendering: pixelated;
+}
+.title-parade .parade-boss {
+  width: 56px;
+  height: 56px;
+}
+.parade-vs {
+  font-family: "Press Start 2P", monospace;
+  font-size: 13px;
+  color: var(--gold);
+  margin: 0 6px;
+}
+
+/* ---------- ドット絵共通 ---------- */
+.avatar {
+  width: 26px;
+  height: 26px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+.name-cell {
+  text-align: left;
+}
+.name-cell .avatar {
+  vertical-align: middle;
+  margin-right: 6px;
 }
 @keyframes bob {
   0%, 100% { transform: translateY(0); }
@@ -493,7 +525,7 @@ body {
   border-color: var(--gold);
   box-shadow: 0 0 14px rgba(255, 213, 74, 0.45);
 }
-.enemy-card.hit .enemy-icon {
+.enemy-card.hit .enemy-sprite {
   animation: enemyhit 0.18s;
 }
 @keyframes enemyhit {
@@ -506,6 +538,35 @@ body {
   filter: grayscale(1);
   cursor: default;
 }
+.enemy-sprite {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  animation: bob 2.8s ease-in-out infinite;
+}
+.enemy-card.boss .enemy-sprite {
+  width: 96px;
+  height: 96px;
+  animation-duration: 2s;
+}
+.enemy-sprite.ko {
+  transform: rotate(180deg);
+  animation: none;
+  opacity: 0.6;
+}
+.deco-strip {
+  display: flex;
+  justify-content: space-evenly;
+  align-items: flex-end;
+  opacity: 0.55;
+  pointer-events: none;
+  margin: -4px 0;
+}
+.deco-strip img {
+  width: 40px;
+  height: 40px;
+  image-rendering: pixelated;
+}
 .target-marker {
   position: absolute;
   top: -20px;
@@ -515,13 +576,6 @@ body {
   font-size: 12px;
   animation: bob 1s infinite;
   white-space: nowrap;
-}
-.enemy-icon {
-  font-size: 44px;
-  line-height: 1.2;
-}
-.enemy-card.boss .enemy-icon {
-  font-size: 64px;
 }
 .enemy-name {
   font-size: 13px;
@@ -849,6 +903,20 @@ body {
 .clear-stage-name {
   font-size: 18px;
 }
+.boss-win-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--sub);
+  font-size: 15px;
+}
+.boss-win-sprite {
+  width: 44px;
+  height: 44px;
+  image-rendering: pixelated;
+  filter: grayscale(1) brightness(0.7);
+  transform: rotate(180deg);
+}
 .drop-panel {
   background: var(--panel);
   border: 2px solid var(--gold);
@@ -984,8 +1052,13 @@ body {
   .enemy-card.boss {
     width: 150px;
   }
-  .enemy-icon {
-    font-size: 34px;
+  .enemy-sprite {
+    width: 48px;
+    height: 48px;
+  }
+  .enemy-card.boss .enemy-sprite {
+    width: 72px;
+    height: 72px;
   }
   .word-card {
     min-width: 140px;

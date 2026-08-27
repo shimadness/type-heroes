@@ -63,45 +63,100 @@ export const equipDef = (id: EquipId): EquipDef | undefined =>
   EQUIPS.find((e) => e.id === id);
 
 // ============================================================
-// 敵
+// 敵（Engineer Navigator のダンジョンモンスターを流用）
+// スプライト: public/en/<sprite>.png（ドット絵・192x192）
 // ============================================================
 export interface EnemyKind {
   id: string;
   name: string;
-  icon: string;
+  sprite: string; // public/en/<sprite>.png
   boss?: boolean;
   baseHp: number; // 1人あたり基準HP（人数・難易度で補正）
   atk: number; // 攻撃力
   atkInterval: number; // 攻撃間隔ms
   gimmicks?: ("ink" | "shuffle" | "katakana")[];
+  enc: string; // 出現時の一文
+  win: string; // 撃破時の一文（ボスで表示）
 }
 
 export const ENEMY_KINDS: Record<string, EnemyKind> = {
-  slime: { id: "slime", name: "スライム", icon: "🟢", baseHp: 60, atk: 8, atkInterval: 9000 },
-  bat: { id: "bat", name: "コウモリ", icon: "🦇", baseHp: 45, atk: 6, atkInterval: 7000 },
-  mushroom: { id: "mushroom", name: "どくキノコ", icon: "🍄", baseHp: 55, atk: 9, atkInterval: 10000 },
-  kingslime: {
-    id: "kingslime", name: "キングスライム", icon: "👑", boss: true,
-    baseHp: 220, atk: 13, atkInterval: 8000, gimmicks: ["shuffle"],
+  minibug: {
+    id: "minibug", name: "ミニバグ", sprite: "mon-minibug",
+    baseHp: 45, atk: 6, atkInterval: 8000,
+    enc: "小さなバグが飛び出してきた！", win: "ワンライナーで退治した！",
   },
-  goblin: { id: "goblin", name: "ゴブリン", icon: "👺", baseHp: 70, atk: 10, atkInterval: 8000 },
-  skeleton: { id: "skeleton", name: "ガイコツ", icon: "💀", baseHp: 65, atk: 11, atkInterval: 9000 },
-  spider: { id: "spider", name: "おおグモ", icon: "🕷️", baseHp: 60, atk: 9, atkInterval: 7500 },
-  dragon: {
-    id: "dragon", name: "ドラゴン", icon: "🐉", boss: true,
-    baseHp: 320, atk: 17, atkInterval: 7500, gimmicks: ["ink"],
+  typo: {
+    id: "typo", name: "タイポの小人", sprite: "mon-typo",
+    baseHp: 50, atk: 7, atkInterval: 9000,
+    enc: "タイポの小人が足元にセミコロンを撒いた！", win: "リンターの光で追い払った！",
   },
-  ghost: { id: "ghost", name: "ゴースト", icon: "👻", baseHp: 75, atk: 11, atkInterval: 8000 },
-  demon: { id: "demon", name: "デーモン", icon: "😈", baseHp: 85, atk: 13, atkInterval: 8500 },
-  golem: { id: "golem", name: "ゴーレム", icon: "🗿", baseHp: 110, atk: 12, atkInterval: 11000 },
-  maou: {
-    id: "maou", name: "まおう", icon: "🐲", boss: true,
-    baseHp: 450, atk: 20, atkInterval: 7000, gimmicks: ["ink", "shuffle", "katakana"],
+  offbyone: {
+    id: "offbyone", name: "オフバイワン鳥", sprite: "mon-offbyone",
+    baseHp: 55, atk: 8, atkInterval: 8500,
+    enc: "オフバイワン鳥が1歩ずれて飛んでいる！", win: "境界値を見切って捕まえた！",
+  },
+  mojibake: {
+    id: "mojibake", name: "文字化けオバケ", sprite: "mon-mojibake",
+    baseHp: 60, atk: 9, atkInterval: 9500,
+    enc: "「縺ゅ→縺ｧ」と鳴く影が現れた！", win: "UTF-8の御札で祓った！",
+  },
+  infloop: {
+    id: "infloop", name: "無限ループヘビ", sprite: "mon-infloop",
+    baseHp: 65, atk: 10, atkInterval: 8000,
+    enc: "自分の尻尾を追うヘビが道を塞いでいる！", win: "break文を投げて断ち切った！",
+  },
+  memleak: {
+    id: "memleak", name: "メモリリークスライム", sprite: "mon-memleak",
+    baseHp: 80, atk: 9, atkInterval: 10000,
+    enc: "スライムがじわじわ膨らみ続けている！", win: "解放の呪文でしぼませた！",
+  },
+  nullpo: {
+    id: "nullpo", name: "ヌルポ", sprite: "mon-nullpo",
+    baseHp: 70, atk: 11, atkInterval: 8500,
+    enc: "実体のない何かがそこに「無い」！", win: "Optionalの網で捕獲した！",
+  },
+  deadlock: {
+    id: "deadlock", name: "デッドロックガニ", sprite: "mon-deadlock",
+    baseHp: 85, atk: 10, atkInterval: 9500,
+    enc: "2匹のカニが互いを挟んで動けない！", win: "片方に先を譲らせて突破！",
+  },
+  cacheghost: {
+    id: "cacheghost", name: "キャッシュゴースト", sprite: "mon-cacheghost",
+    baseHp: 80, atk: 12, atkInterval: 8000,
+    enc: "倒したはずの敵の残像が立ちはだかる！", win: "スーパーリロードで消し飛ばした！",
+  },
+  flaky: {
+    id: "flaky", name: "フレーキーコウモリ", sprite: "mon-flaky",
+    baseHp: 70, atk: 11, atkInterval: 7000,
+    enc: "たまにしか当たらない攻撃をするコウモリだ！", win: "3回リトライして見事命中！",
+  },
+  specchange: {
+    id: "specchange", name: "仕様変更カメレオン", sprite: "mon-specchange",
+    baseHp: 90, atk: 13, atkInterval: 9000,
+    enc: "戦っている最中に姿が変わっていく！", win: "要件を書面で固定して撃破！",
+  },
+  debtgolem: {
+    id: "debtgolem", name: "技術的負債ゴーレム", sprite: "mon-debtgolem", boss: true,
+    baseHp: 230, atk: 13, atkInterval: 8000, gimmicks: ["shuffle"],
+    enc: "放置された年月のぶんだけ硬いゴーレムが現れた！",
+    win: "小さなリファクタを積み重ねて崩した！",
+  },
+  legacydragon: {
+    id: "legacydragon", name: "レガシーコードドラゴン", sprite: "mon-legacydragon", boss: true,
+    baseHp: 330, atk: 17, atkInterval: 7500, gimmicks: ["ink", "shuffle"],
+    enc: "誰も全容を知らない巨竜が目を覚ました！",
+    win: "テストで外堀を埋め、ついに打ち倒した！",
+  },
+  prodhydra: {
+    id: "prodhydra", name: "本番障害ヒュドラ", sprite: "mon-prodhydra", boss: true,
+    baseHp: 460, atk: 20, atkInterval: 7000, gimmicks: ["ink", "shuffle", "katakana"],
+    enc: "首を1本直すと2本生える怪物が咆哮した！",
+    win: "根本原因の心臓を貫いた！！",
   },
 };
 
 // ============================================================
-// ステージ
+// ステージ（エンジニアダンジョン）
 // ============================================================
 export interface StageDef {
   name: string;
@@ -109,29 +164,33 @@ export interface StageDef {
   icon: string;
   waves: string[][]; // wave ごとの敵 kind 一覧（最後の wave にボス）
   weaknessPool: GenreId[]; // このステージの敵の弱点候補
+  deco: string[]; // 床に並べる装飾スプライト（public/en/<name>.png）
 }
 
 export const STAGES: StageDef[] = [
   {
-    name: "はじまりの森",
-    icon: "🌲",
-    bg: "linear-gradient(180deg,#0c2418 0%,#14381f 60%,#0a1f12 100%)",
-    waves: [["slime", "bat", "mushroom"], ["kingslime", "slime"]],
-    weaknessPool: ["food", "animal", "nature"],
+    name: "開発フロア",
+    icon: "💻",
+    bg: "linear-gradient(180deg,#0d1b2a 0%,#16324a 55%,#0a1522 100%)",
+    waves: [["minibug", "typo", "offbyone"], ["debtgolem", "mojibake"]],
+    weaknessPool: ["it", "food", "animal"],
+    deco: ["gad-crt", "gad-succulent", "gad-elec-desk", "gad-tate-monitor", "gad-retro-pc"],
   },
   {
-    name: "こだまの洞窟",
-    icon: "⛰️",
-    bg: "linear-gradient(180deg,#1a1430 0%,#2a1e45 60%,#120e22 100%)",
-    waves: [["goblin", "skeleton", "spider"], ["golem", "skeleton"], ["dragon"]],
-    weaknessPool: ["vehicle", "it", "nature"],
+    name: "サーバールーム",
+    icon: "🗄️",
+    bg: "linear-gradient(180deg,#0a0f2e 0%,#151d4d 55%,#080c20 100%)",
+    waves: [["infloop", "memleak", "nullpo"], ["deadlock", "memleak"], ["legacydragon"]],
+    weaknessPool: ["it", "vehicle", "nature"],
+    deco: ["gad-rack-server", "gad-rack42u", "gad-raspi-cluster", "gad-ups", "gad-rack-server"],
   },
   {
-    name: "まおうの城",
-    icon: "🏰",
-    bg: "linear-gradient(180deg,#2b0a14 0%,#3d0f1f 60%,#1a060c 100%)",
-    waves: [["demon", "ghost", "ghost"], ["golem", "demon"], ["maou"]],
-    weaknessPool: ["magic", "it", "food"],
+    name: "本番環境",
+    icon: "🚨",
+    bg: "linear-gradient(180deg,#2b0a0f 0%,#471219 55%,#1a0508 100%)",
+    waves: [["cacheghost", "flaky", "specchange"], ["specchange", "cacheghost"], ["prodhydra"]],
+    weaknessPool: ["it", "magic", "food"],
+    deco: ["icon-trap", "gad-rack42u", "gad-ups", "icon-trap", "gad-printer3d"],
   },
 ];
 
@@ -160,7 +219,8 @@ export const TUNING = {
   keyDamage: 1, // 1打鍵ごとの基礎ダメージ
   wordBonusPerKana: 2.2, // ワード完了ボーナス = かな数 × これ
   critMult: 1.5, // ノーミス完了クリティカル
-  weaknessMult: 2.0, // 弱点ジャンル一致
+  weaknessMult: 2.5, // 弱点ジャンル一致（雑魚）
+  bossWeaknessMult: 3.5, // 弱点ジャンル一致（ボス）— 早打ちゴリ押しよりカード選びが強い
   healPerKana: 3.0, // 回復量 = かな数 × これ
   keyHeal: 0.35, // 1打鍵ごとの微回復（回復モード時）
   chainWindow: 3000, // コンボチェイン受付ms

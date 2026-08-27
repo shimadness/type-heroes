@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import type { Session } from "../App";
 import type { RoomState } from "../game/types";
-import { STAGES, equipDef, roleDef } from "../game/data";
+import { ENEMY_KINDS, STAGES, equipDef, roleDef } from "../game/data";
+import { enAsset } from "../assets";
 import { HostBrain } from "../game/host";
 import { allPlayers } from "../game/room";
 
@@ -25,6 +26,16 @@ export function StageClear({ session, state }: Props) {
       <div className="clear-stage-name">
         {stage.icon} {stage.name} をクリアした！
       </div>
+      {(() => {
+        const lastWave = stage.waves[stage.waves.length - 1];
+        const boss = lastWave.map((k) => ENEMY_KINDS[k]).find((k) => k?.boss);
+        return boss ? (
+          <div className="boss-win-line">
+            <img className="boss-win-sprite" src={enAsset(boss.sprite)} alt="" draggable={false} />
+            <span>{boss.win}</span>
+          </div>
+        ) : null;
+      })()}
 
       <div className="drop-panel">
         <h3>🎁 そうびを手に入れた！</h3>

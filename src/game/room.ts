@@ -289,12 +289,12 @@ export class Room {
 
   // ---------- helpers ----------
 
-  /** 与ダメージ倍率（ロール・装備・バフ・チェイン込み） */
+  /** 与ダメージ倍率（ロール・装備・バフ・チェイン込み）。weaknessMult は 1（不一致）〜 boss弱点倍率 */
   static damageMult(
     me: PlayerState,
     state: RoomState | null,
     chainCount: number,
-    weakness: boolean,
+    weaknessMult: number,
     crit: boolean
   ): number {
     const r = roleDef(me.role);
@@ -303,7 +303,7 @@ export class Room {
     const buff = state?.buff;
     if (buff && buff.until > Date.now()) m *= buff.mult;
     m *= 1 + Math.min(TUNING.chainBonusMax, Math.max(0, chainCount - 1) * TUNING.chainBonusPer);
-    if (weakness) m *= TUNING.weaknessMult;
+    m *= weaknessMult;
     if (crit) m *= TUNING.critMult;
     return m;
   }

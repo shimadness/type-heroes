@@ -1,0 +1,70 @@
+{
+  // triple-slot-ranking の RTDB 全体ルール。
+  // このDBは TWINKLE DROP RUSH（drop/slot/events/appmeta）と TYPE HEROES（typing）で共用しているため、
+  // ここが全アプリの唯一の正となる。デプロイ: npx firebase-tools deploy --only database
+  "rules": {
+    // ---- TWINKLE DROP RUSH: ランキング ----
+    "drop": {
+      ".read": true, ".write": true, ".indexOn": ["score"],
+      "$id": {
+        ".validate": "newData.hasChildren(['name','score','bet','mode','at'])",
+        "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
+        "score": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "bet": { ".validate": "newData.isNumber()" },
+        "mode": { ".validate": "newData.val() === 'drop'" },
+        "at": { ".validate": "newData.isNumber()" }
+      }
+    },
+    "slot": {
+      ".read": true, ".write": true, ".indexOn": ["score"],
+      "$id": {
+        ".validate": "newData.hasChildren(['name','score','bet','mode','at'])",
+        "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
+        "score": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "bet": { ".validate": "newData.isNumber()" },
+        "mode": { ".validate": "newData.val() === 'slot'" },
+        "at": { ".validate": "newData.isNumber()" }
+      }
+    },
+
+    // ---- TWINKLE DROP RUSH: かせぎ大会モード ----
+    "events": {
+      "$code": {
+        ".read": true, ".write": true,
+        ".validate": "$code.length >= 3 && $code.length <= 8"
+      }
+    },
+
+    // ---- TWINKLE DROP RUSH: アプリ内アップデート告知（書き込みはコンソールのみ） ----
+    "appmeta": { ".read": true, ".write": false },
+
+    // ---- TYPE HEROES ----
+    "typing": {
+      // あいことば（パスワード）ごとの対戦ルーム。3〜12文字。
+      // 24時間以上前に作られた部屋は上書き可（作り直しできるようにするため）。
+      "rooms": {
+        "$roomCode": {
+          ".read": true,
+          ".write": true,
+          ".validate": "$roomCode.length >= 3 && $roomCode.length <= 12"
+        }
+      },
+      // クリアタイムのチームランキング（難易度別）
+      "ranking": {
+        "$diff": {
+          ".read": true,
+          ".write": true,
+          ".indexOn": ["timeMs"],
+          "$id": {
+            ".validate": "newData.hasChildren(['names','timeMs','at'])",
+            "timeMs": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "at": { ".validate": "newData.isNumber()" },
+            "names": {
+              "$i": { ".validate": "newData.isString() && newData.val().length <= 10" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

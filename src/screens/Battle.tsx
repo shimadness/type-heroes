@@ -33,6 +33,9 @@ import {
 import { sfx } from "../sfx";
 import { fireAndForget } from "../net/store";
 import { alienFor, enAsset } from "../assets";
+import { TouchKeyboard, isTouchDevice } from "../ui/TouchKeyboard";
+
+const TOUCH = isTouchDevice();
 
 interface Props {
   session: Session;
@@ -383,30 +386,12 @@ export function Battle({ session, state, onLeave }: Props) {
     [room, mode, targetKey, addFloat, makeGenreCard, forceUpdate]
   );
 
-  // ---------- キー入力 ----------
-  useEffect(() => {
-    if (isSpectator) return;
-    const onKey = (e: KeyboardEvent) => {
+  // ---------- 1打鍵の処理（物理キーボードとタッチキーボード共通） ----------
+  const handleChar = useCallback(
+    (key: string) => {
       const s = stateRef.current;
       const myself = s.players?.[room.myId];
       if (!myself?.alive) return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-      if (e.key === "Tab") {
-        e.preventDefault();
-        if (cards.length > 1 && activeCard) {
-          const idx = cards.findIndex((c) => c.id === activeCard.id);
-          setActiveCardId(cards[(idx + 1) % cards.length].id);
-        }
-        return;
-      }
-      if (e.key === " ") {
-        e.preventDefault();
-        setMode((m) => (m === "attack" ? "heal" : "attack"));
-        return;
-      }
-      if (!/^[a-z0-9\-,.!?/]$/i.test(e.key)) return;
-      e.preventDefault();
 
       // ユニゾン最優先
       const word = unisonTyping
@@ -414,7 +399,7 @@ export function Battle({ session, state, onLeave }: Props) {
         : activeCard?.word;
       if (!word || word.finished) return;
 
-      const ok = word.input(e.key);
+      const ok = word.input(key);
       if (ok) {
         sfx.type();
         comboRef.current++;
@@ -452,13 +437,38 @@ export function Battle({ session, state, onLeave }: Props) {
         setTimeout(() => setMissFlash(false), 180);
       }
       forceUpdate();
+    },
+    [room, activeCard, mode, targetKey, unisonTyping, completeWord, forceUpdate]
+  );
+
+  // ---------- キー入力（物理キーボード） ----------
+  useEffect(() => {
+    if (isSpectator) return;
+    const onKey = (e: KeyboardEvent) => {
+      const myself = stateRef.current.players?.[room.myId];
+      if (!myself?.alive) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.key === "Tab") {
+        e.preventDefault();
+        if (cards.length > 1 && activeCard) {
+          const idx = cards.findIndex((c) => c.id === activeCard.id);
+          setActiveCardId(cards[(idx + 1) % cards.length].id);
+        }
+        return;
+      }
+      if (e.key === " ") {
+        e.preventDefault();
+        setMode((m) => (m === "attack" ? "heal" : "attack"));
+        return;
+      }
+      if (!/^[a-z0-9\-,.!?/]$/i.test(e.key)) return;
+      e.preventDefault();
+      handleChar(e.key);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [
-    isSpectator, room, activeCard, cards, mode, targetKey,
-    unisonTyping, completeWord, forceUpdate,
-  ]);
+  }, [isSpectator, room, activeCard, cards, handleChar]);
 
   // ---------- 定期フラッシュ（打鍵ダメージ・回復・スタッツ）----------
   useEffect(() => {
@@ -543,6 +553,15 @@ export function Battle({ session, state, onLeave }: Props) {
   const kpm = Math.round(localSessionStats.current.typed / wpmElapsed);
   const totalKeys = localSessionStats.current.typed + localSessionStats.current.miss;
   const acc = totalKeys > 0 ? Math.round((localSessionStats.current.typed / totalKeys) * 100) : 100;
+
+  // タッチキーボードが打鍵を渡す先（＝いま入力を受けているワード）
+  const touchWord = !me?.alive
+    ? null
+    : unisonTyping
+      ? unisonWordRef.current?.word ?? null
+      : unison?.active && unison.done?.[room.myId]
+        ? null
+        : activeCard?.word ?? null;
 
   const dispWord = (w: TypingWord, kata: boolean) => {
     const [typed, rest] = w.romajiParts();
@@ -840,6 +859,14 @@ export function Battle({ session, state, onLeave }: Props) {
             </>
           )}
         </div>
+      )}
+
+      {/* ---- タッチキーボード（スマホ・タブレット） ---- */}
+      {TOUCH && !isSpectator && touchWord && (
+        <TouchKeyboard
+          onKey={handleChar}
+          nextKey={touchWord.romajiParts()[1][0]}
+        />
       )}
 
       {isSpectator && (

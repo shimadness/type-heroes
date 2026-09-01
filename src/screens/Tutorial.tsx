@@ -16,6 +16,9 @@ import { TypingWord } from "../typing/romaji";
 import { GENRES, type GenreId } from "../typing/words";
 import { alienFor, enAsset } from "../assets";
 import { sfx } from "../sfx";
+import { TouchKeyboard, isTouchDevice } from "../ui/TouchKeyboard";
+
+const TOUCH = isTouchDevice();
 
 interface Props {
   onExit: () => void;
@@ -280,7 +283,25 @@ export function Tutorial({ onExit }: Props) {
     [step, advance, float, rerender]
   );
 
-  // ---------- キー入力 ----------
+  // ---------- 1打鍵の処理（物理キーボードとタッチキーボード共通） ----------
+  const handleChar = useCallback(
+    (ch: string) => {
+      if (step === "done") return;
+      const card = cardsRef.current.find((c) => c.id === activeIdRef.current);
+      if (!card || card.word.finished) return;
+      // 回復ステップでは攻撃モードのままだと進まない（切り替えに気づいてもらう）
+      if (card.word.input(ch)) {
+        sfx.type();
+        if (card.word.finished) onWordDone(card);
+      } else {
+        sfx.miss();
+      }
+      rerender();
+    },
+    [step, onWordDone, rerender]
+  );
+
+  // ---------- キー入力（物理キーボード） ----------
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -304,21 +325,11 @@ export function Tutorial({ onExit }: Props) {
       }
       if (!/^[a-z0-9\-,.!?/]$/i.test(e.key)) return;
       e.preventDefault();
-
-      const card = cardsRef.current.find((c) => c.id === activeIdRef.current);
-      if (!card || card.word.finished) return;
-      // 回復ステップでは攻撃モードのままだと進まない（Spaceに気づいてもらう）
-      if (card.word.input(e.key)) {
-        sfx.type();
-        if (card.word.finished) onWordDone(card);
-      } else {
-        sfx.miss();
-      }
-      rerender();
+      handleChar(e.key);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step, onWordDone, rerender]);
+  }, [step, handleChar, rerender]);
 
   // ---------- ユニゾン発動 ----------
   const fireUnison = () => {
@@ -349,7 +360,9 @@ export function Tutorial({ onExit }: Props) {
       sub: "1打鍵ごとに敵がのけぞる。ミスなく打ち切ると会心（×" + TUNING.critMult + "）",
     },
     weakness: {
-      main: "Tab で ⚡弱点 のカードにきりかえて打とう",
+      main: TOUCH
+        ? "⚡弱点 のカードをタップしてから打とう"
+        : "Tab で ⚡弱点 のカードにきりかえて打とう",
       sub: `弱点ジャンルは ×${TUNING.weaknessMult}（ボスは ×${TUNING.bossWeaknessMult}）`,
     },
     defense: {
@@ -357,7 +370,9 @@ export function Tutorial({ onExit }: Props) {
       sub: "間に合えば ダメージはんげん",
     },
     heal: {
-      main: "ライフがピンチ！ Space で 💚かいふく に切りかえて打とう",
+      main: TOUCH
+        ? "ライフがピンチ！ 💚かいふく をタップしてから打とう"
+        : "ライフがピンチ！ Space で 💚かいふく に切りかえて打とう",
       sub: "同じタイピングでも 攻撃か回復かが変わる",
     },
     revive: {
@@ -606,9 +621,21 @@ export function Tutorial({ onExit }: Props) {
 
         {okRef.current && <div className="tut-ok">✓ できた！</div>}
         {activeCard && step === "heal" && !healMode && (
-          <div className="tut-nudge">Space をおして 💚かいふく にしてから打とう</div>
+          <div className="tut-nudge">
+            {TOUCH
+              ? "💚かいふく をタップしてから打とう"
+              : "Space をおして 💚かいふく にしてから打とう"}
+          </div>
         )}
       </div>
+
+      {/* タッチキーボード（スマホ・タブレット） */}
+      {TOUCH && activeCard && !activeCard.word.finished && (
+        <TouchKeyboard
+          onKey={handleChar}
+          nextKey={activeCard.word.romajiParts()[1][0]}
+        />
+      )}
     </div>
   );
 }

@@ -36,10 +36,14 @@ body {
   color: var(--text);
   font-family: "DotGothic16", "Hiragino Kaku Gothic ProN", sans-serif;
   overflow-x: hidden;
+  /* スマホ: プレイ中のプルリフレッシュ・タップ光を抑止 */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .screen {
   min-height: 100vh;
+  min-height: 100dvh; /* スマホのアドレスバー分を除いた実表示域 */
   display: flex;
   flex-direction: column;
   padding: 16px;
@@ -1162,11 +1166,112 @@ body {
   color: #67e8f9;
 }
 
+/* ---------- タッチキーボード ---------- */
+.touch-keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+  background: var(--panel);
+  border: 2px solid var(--panel-border);
+  border-radius: 16px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.tk-row {
+  display: flex;
+  gap: 5px;
+}
+.tk-key {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 14px;
+  color: var(--text);
+  background: #241d45;
+  border: 2px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0;
+  touch-action: none;
+}
+.tk-key:active {
+  background: #453a7d;
+  transform: translateY(1px);
+}
+.tk-key.next {
+  border-color: #67e8f9;
+  color: #67e8f9;
+  background: rgba(103, 232, 249, 0.14);
+  box-shadow: 0 0 8px rgba(103, 232, 249, 0.35);
+}
+
+/* タッチ端末では Space/Tab のヒントは意味がない（ボタン・カードを直接タップ） */
+@media (pointer: coarse) {
+  .mode-hint {
+    display: none;
+  }
+}
+
 /* ---------- スマホ ---------- */
 @media (max-width: 640px) {
-  .enemy-card {
-    width: 110px;
+  .battle-screen {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+  .typing-panel {
     padding: 8px;
+  }
+  .deco-strip {
+    display: none; /* 縦スペースをタッチキーボードに譲る */
+  }
+  .word-card {
+    min-width: 104px;
+    max-width: none;
+    padding: 6px 8px;
+  }
+  .card-jp {
+    font-size: 16px;
+  }
+  .card-romaji {
+    font-size: 11px;
+    letter-spacing: 0;
+  }
+  .mode-btn {
+    font-size: 13px;
+    padding: 5px 12px;
+  }
+  .stat-row {
+    gap: 10px;
+    margin-top: 6px;
+    font-size: 12px;
+  }
+  .touch-keyboard {
+    gap: 4px;
+    margin-top: 6px;
+    padding: 6px 3px calc(6px + env(safe-area-inset-bottom));
+  }
+  .tk-key {
+    height: 40px;
+    font-size: 12px;
+  }
+  .enemy-card {
+    width: 106px;
+    padding: 6px;
+  }
+  .enemy-name {
+    font-size: 12px;
+  }
+  .weakness-chip {
+    font-size: 10px;
+  }
+  .player-card {
+    padding: 6px;
+  }
+  .player-hp-num {
+    font-size: 11px;
   }
   .enemy-card.boss {
     width: 150px;

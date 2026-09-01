@@ -179,8 +179,10 @@ export function Battle({ session, state, onLeave }: Props) {
       processedEvents.current.add(id);
       if (ev.type === "telegraph") {
         const t = ev as TelegraphEvent;
+        // 全体攻撃は targets:[] で送られるが、RTDB は空配列を削除するので undefined で届く
+        const targets = t.targets ?? [];
         const targetsMe =
-          !isSpectator && (t.targets.length === 0 || t.targets.includes(room.myId));
+          !isSpectator && (targets.length === 0 || targets.includes(room.myId));
         if (targetsMe && me?.alive) {
           const w = pickDefense();
           defenseCardsRef.current = [
@@ -711,7 +713,7 @@ export function Battle({ session, state, onLeave }: Props) {
           const rd = roleDef(pl.role);
           const eq = equipDef(pl.equip);
           const targeted = telegraphs.some(
-            ([, t]) => t.targets.length === 0 || t.targets.includes(pid)
+            ([, t]) => (t.targets ?? []).length === 0 || (t.targets ?? []).includes(pid)
           );
           return (
             <div

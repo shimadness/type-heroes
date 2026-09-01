@@ -54,7 +54,9 @@ export interface TelegraphEvent {
   type: "telegraph";
   id: string;
   enemyIdx: number;
-  targets: string[]; // player ids ([] = 全体攻撃)
+  // player ids（[] = 全体攻撃）。RTDB は空配列をフィールドごと削除するため、
+  // 受信側では undefined = 全体攻撃として扱うこと
+  targets?: string[];
   dmg: number;
   resolveAt: number;
   at: number;

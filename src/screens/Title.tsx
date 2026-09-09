@@ -1,24 +1,26 @@
 import { useState } from "react";
 import type { JoinProfile } from "../game/room";
-import type { Difficulty } from "../typing/words";
-import { ROLES } from "../game/data";
-import type { RoleId } from "../game/types";
+import { ROLES, SURVIVAL, type TeamDifficulty } from "../game/data";
+import type { GameMode, RoleId } from "../game/types";
 import { alienFor, enAsset } from "../assets";
 
 interface Props {
   error: string;
-  onSolo: (profile: JoinProfile, teamDiff: Difficulty) => void;
-  onCreate: (pw: string, profile: JoinProfile, teamDiff: Difficulty) => void;
+  onSolo: (profile: JoinProfile, teamDiff: TeamDifficulty, gameMode: GameMode) => void;
+  onCreate: (pw: string, profile: JoinProfile, teamDiff: TeamDifficulty, gameMode: GameMode) => void;
   onJoin: (pw: string, profile: JoinProfile) => void;
   onSpectate: (pw: string) => void;
   onRanking: () => void;
   onTutorial: () => void;
 }
 
-type Mode = "menu" | "solo" | "create" | "join" | "spectate";
+// 画面内のセットアップ段階（warlord = うぉーろーどのサブメニュー）
+type Mode = "menu" | "warlord" | "solo" | "create" | "join" | "spectate";
 
 export function Title(p: Props) {
   const [mode, setMode] = useState<Mode>("menu");
+  // ゲームモードはここでだけ決める（ロビーでは表示のみ）
+  const [gameMode, setGameMode] = useState<GameMode>("story");
   const [name, setName] = useState(
     () => localStorage.getItem("th_name") ?? ""
   );
@@ -26,7 +28,7 @@ export function Title(p: Props) {
   const [role, setRole] = useState<RoleId>("attacker");
   // 難易度はロビーで決める（ここで選ばせるとロビーの設定と二重になる）。
   // これはその初期値でしかない。
-  const diff: Difficulty = "normal";
+  const diff: TeamDifficulty = "normal";
   const [busy, setBusy] = useState(false);
 
   const profile = (): JoinProfile => {
@@ -76,6 +78,9 @@ export function Title(p: Props) {
           <button className="btn big" onClick={() => setMode("solo")}>
             🗡️ ひとりで特訓
           </button>
+          <button className="btn big warlord-btn" onClick={() => setMode("warlord")}>
+            ☠️ うぉーろーど
+          </button>
           <button className="btn" onClick={() => setMode("spectate")}>
             📺 観戦する
           </button>
@@ -85,8 +90,42 @@ export function Title(p: Props) {
         </div>
       )}
 
-      {mode !== "menu" && (
+      {mode === "warlord" && (
+        <div className="menu-buttons">
+          <div className="mode-desc">
+            ☠️ 終わりなき戦い。たおした数をきそう。
+            <br />
+            {SURVIVAL.bossEvery}ウェーブごとにボス。全滅したら終了。
+          </div>
+          <button
+            className="btn big"
+            onClick={() => {
+              setGameMode("survival");
+              setMode("create");
+            }}
+          >
+            🏰 へやをつくる
+          </button>
+          <button
+            className="btn big"
+            onClick={() => {
+              setGameMode("survival");
+              setMode("solo");
+            }}
+          >
+            🗡️ ひとりで挑む
+          </button>
+          <button className="btn ghost" onClick={() => setMode("menu")}>
+            もどる
+          </button>
+        </div>
+      )}
+
+      {mode !== "menu" && mode !== "warlord" && (
         <div className="setup-panel">
+          {gameMode === "survival" && (
+            <div className="mode-banner">☠️ うぉーろーど（サバイバル）</div>
+          )}
           {mode !== "spectate" && (
             <>
               <label className="field">
@@ -137,7 +176,13 @@ export function Title(p: Props) {
           {p.error && <div className="error-box">{p.error}</div>}
 
           <div className="setup-actions">
-            <button className="btn ghost" onClick={() => setMode("menu")}>
+            <button
+              className="btn ghost"
+              onClick={() => {
+                setMode(gameMode === "survival" ? "warlord" : "menu");
+                setGameMode("story");
+              }}
+            >
               もどる
             </button>
             <button
@@ -145,14 +190,14 @@ export function Title(p: Props) {
               disabled={busy}
               onClick={() =>
                 go(() => {
-                  if (mode === "solo") p.onSolo(profile(), diff);
-                  else if (mode === "create") p.onCreate(pw, profile(), diff);
+                  if (mode === "solo") p.onSolo(profile(), diff, gameMode);
+                  else if (mode === "create") p.onCreate(pw, profile(), diff, gameMode);
                   else if (mode === "join") p.onJoin(pw, profile());
                   else p.onSpectate(pw);
                 })
               }
             >
-              {mode === "solo" && "特訓スタート！"}
+              {mode === "solo" && (gameMode === "survival" ? "☠️ 挑む！" : "特訓スタート！")}
               {mode === "create" && "へやをつくる！"}
               {mode === "join" && "参加する！"}
               {mode === "spectate" && "観戦する"}

@@ -11,7 +11,7 @@
 //   ステップの流れ自体を変える改修をしたら STEPS の並びも見直す。
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ENEMY_KINDS, TUNING, roleDef } from "../game/data";
+import { DIFF_TUNING, ENEMY_KINDS, SURVIVAL, TEAM_DIFFS, TUNING, roleDef } from "../game/data";
 import { TypingWord } from "../typing/romaji";
 import { GENRES, type GenreId } from "../typing/words";
 import { alienFor, enAsset } from "../assets";
@@ -387,6 +387,8 @@ export function Tutorial({ onExit }: Props) {
   };
 
   if (step === "done") {
+    // ミス自傷のある最初のティア（へる/いんせいむを足しても自動追従）
+    const missTier = TEAM_DIFFS.map((d) => DIFF_TUNING[d]).find((t) => t.missSelfDamage > 0);
     return (
       <div className="screen center tutorial-done-screen">
         <h1 className="clear-title">🎓 チュートリアル しゅうりょう！</h1>
@@ -415,6 +417,22 @@ export function Tutorial({ onExit }: Props) {
               難易度は部屋（じゅんびのやかた）で決める。
               <b>自分の出題だけ「かんたん」</b>にもできるので、
               打つのが苦手な人も同じ部屋で遊べる
+            </span>
+          </div>
+          {missTier && (
+            <div className="tut-sum-row">
+              <span>💥</span>
+              <span>
+                てきの強さ「{missTier.label}」以上は、<b>ミスすると自分のHPが -{missTier.missSelfDamage}</b>。
+                せいかくに打つほど強い
+              </span>
+            </div>
+          )}
+          <div className="tut-sum-row">
+            <span>☠️</span>
+            <span>
+              トップの「うぉーろーど」は終わりなき戦い。{SURVIVAL.bossEvery}ウェーブごとにボス、
+              全滅するまでに<b>たおした数</b>をきそう。難易度は同じく部屋で決める
             </span>
           </div>
         </div>

@@ -64,6 +64,24 @@
             }
           }
         }
+      },
+      // うぉーろーど（サバイバル）の撃破数ランキング（難易度別）
+      "survival": {
+        "$diff": {
+          ".read": true,
+          ".write": true,
+          ".indexOn": ["kills"],
+          "$id": {
+            ".validate": "newData.hasChildren(['names','kills','waves','timeMs','at'])",
+            "kills": { ".validate": "newData.isNumber() && newData.val() >= 1" },
+            "waves": { ".validate": "newData.isNumber() && newData.val() >= 1" },
+            "timeMs": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "at": { ".validate": "newData.isNumber()" },
+            "names": {
+              "$i": { ".validate": "newData.isString() && newData.val().length <= 10" }
+            }
+          }
+        }
       }
     }
   }

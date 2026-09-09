@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 import type { Session } from "../App";
 import type {
@@ -20,7 +21,7 @@ import {
   roleDef,
 } from "../game/data";
 import { HostBrain } from "../game/host";
-import { Room, aliveEnemies, allPlayers } from "../game/room";
+import { Room, aliveEnemies, allPlayers, isSurvival } from "../game/room";
 import { TypingWord, hiraToKata } from "../typing/romaji";
 import {
   GENRES,
@@ -105,7 +106,7 @@ export function Battle({ session, state, onLeave }: Props) {
   const pendingHeal = useRef(0);
   const statsDelta = useRef({
     damage: 0, heal: 0, typed: 0, miss: 0, words: 0,
-    defended: 0, revived: 0, maxCombo: 0,
+    defended: 0, revived: 0, kills: 0, maxCombo: 0,
   });
   const localSessionStats = useRef({ typed: 0, miss: 0, startAt: Date.now() });
   const inkUntil = useRef(0);
@@ -337,6 +338,7 @@ export function Battle({ session, state, onLeave }: Props) {
           pendingDmg.current = 0;
           statsDelta.current.damage += dmg;
           const killed = await room.damageEnemy(Number(targetKey), dmg);
+          if (killed) statsDelta.current.kills++;
           enemyHitAt.current[targetKey] = Date.now();
           addFloat(
             `${weakness ? `弱点×${wMult}!` : ""}${crit ? "会心!" : ""} ${dmg}`,
@@ -437,10 +439,16 @@ export function Battle({ session, state, onLeave }: Props) {
         localSessionStats.current.miss++;
         setMissFlash(true);
         setTimeout(() => setMissFlash(false), 180);
+        // 上位ティアはミスが自傷になる（ロール・装備は効かないフラット値）
+        const selfDmg = DIFF_TUNING[s.meta.diff].missSelfDamage;
+        if (selfDmg > 0) {
+          fireAndForget("ミス自傷", room.damageSelf(selfDmg));
+          addFloat(`💥-${selfDmg}`, "float-hurt", "self");
+        }
       }
       forceUpdate();
     },
-    [room, activeCard, mode, targetKey, unisonTyping, completeWord, forceUpdate]
+    [room, activeCard, mode, targetKey, unisonTyping, completeWord, forceUpdate, addFloat]
   );
 
   // ---------- キー入力（物理キーボード） ----------
@@ -483,7 +491,12 @@ export function Battle({ session, state, onLeave }: Props) {
         statsDelta.current.damage += dmg;
         const enemy = (s.enemies ?? {})[targetKey];
         if (enemy?.alive)
-          fireAndForget("打鍵ダメージ", room.damageEnemy(Number(targetKey), dmg));
+          fireAndForget(
+            "打鍵ダメージ",
+            room.damageEnemy(Number(targetKey), dmg).then((killed) => {
+              if (killed) statsDelta.current.kills++;
+            })
+          );
       }
       if (pendingHeal.current >= 1) {
         const amount = Math.round(pendingHeal.current);
@@ -496,11 +509,11 @@ export function Battle({ session, state, onLeave }: Props) {
     }, 700);
     const statsIv = setInterval(() => {
       const d = statsDelta.current;
-      if (d.damage || d.heal || d.typed || d.miss || d.words || d.defended || d.revived || d.maxCombo) {
+      if (d.damage || d.heal || d.typed || d.miss || d.words || d.defended || d.revived || d.kills || d.maxCombo) {
         fireAndForget("スタッツ送信", room.flushStats({ ...d }));
         statsDelta.current = {
           damage: 0, heal: 0, typed: 0, miss: 0, words: 0,
-          defended: 0, revived: 0, maxCombo: 0,
+          defended: 0, revived: 0, kills: 0, maxCombo: 0,
         };
       }
     }, 2000);
@@ -539,6 +552,7 @@ export function Battle({ session, state, onLeave }: Props) {
   const katakanaMode = now < kataUntil.current;
   const inkMode = now < inkUntil.current;
   const tuning = DIFF_TUNING[state.meta.diff];
+  const survival = isSurvival(state);
 
   // 敵の攻撃予告（画面表示用）
   const telegraphs = Object.entries(state.events ?? {}).filter(
@@ -586,10 +600,20 @@ export function Battle({ session, state, onLeave }: Props) {
       {/* ---- トップバー ---- */}
       <div className="battle-top">
         <div className="stage-label">
-          {stage.icon} {stage.name}{" "}
-          <span className="wave-label">
-            WAVE {state.meta.wave + 1}/{STAGES[state.meta.stageIdx].waves.length}
-          </span>
+          {survival ? (
+            <>
+              ☠️ WAVE {state.meta.wave + 1}{" "}
+              <span className="wave-label kills-label">撃破 {state.meta.kills ?? 0}</span>{" "}
+              <span className="wave-label">{stage.icon} {stage.name}</span>
+            </>
+          ) : (
+            <>
+              {stage.icon} {stage.name}{" "}
+              <span className="wave-label">
+                WAVE {state.meta.wave + 1}/{stage.waves.length}
+              </span>
+            </>
+          )}
         </div>
         {boss && (
           <div className="rage-wrap" title="ボスのいかりゲージ。満タンで全体攻撃！">
@@ -664,6 +688,7 @@ export function Battle({ session, state, onLeave }: Props) {
                 src={enAsset(kind.sprite)}
                 alt={kind.name}
                 draggable={false}
+                style={kind.tint ? ({ "--tint": kind.tint } as CSSProperties) : undefined}
               />
               <div className="enemy-name">
                 {kind.boss && "👑"}
@@ -853,10 +878,14 @@ export function Battle({ session, state, onLeave }: Props) {
                 </span>
                 <span>⌨️ {kpm} 打/分</span>
                 <span>🎯 せいかく {acc}%</span>
-                <span className="diff-note">
-                  てき: {tuning === DIFF_TUNING.easy ? "" : ""}
-                  {state.meta.diff === "easy" ? "かんたん" : state.meta.diff === "normal" ? "ふつう" : state.meta.diff === "hard" ? "むずかしい" : "おに"}
+                <span className="diff-note" style={{ color: tuning.color }}>
+                  てき: {tuning.label}
                 </span>
+                {tuning.missSelfDamage > 0 && (
+                  <span className="miss-note" title="ミスタイプすると自分のHPが減る">
+                    💥ミス -{tuning.missSelfDamage}
+                  </span>
+                )}
               </div>
             </>
           )}

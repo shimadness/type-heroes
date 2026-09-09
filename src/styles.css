@@ -19,10 +19,6 @@
   --accent: #7c6cff;
   --attack: #ff6b6b;
   --heal: #4ade80;
-  --easy: #4ade80;
-  --normal: #60a5fa;
-  --hard: #fb923c;
-  --oni: #f43f5e;
 }
 
 html,
@@ -291,11 +287,10 @@ body {
   color: var(--text);
   cursor: pointer;
 }
-.diff-btn.sel.diff-easy { border-color: var(--easy); color: var(--easy); }
-.diff-btn.sel.diff-normal { border-color: var(--normal); color: var(--normal); }
-.diff-btn.sel.diff-hard { border-color: var(--hard); color: var(--hard); }
-.diff-btn.sel.diff-oni { border-color: var(--oni); color: var(--oni); }
+/* 難易度の色は data.ts の DIFF_TUNING[].color を --diff-color で受け取る（ティア追加で CSS は触らない） */
 .diff-btn.sel {
+  border-color: var(--diff-color, var(--accent));
+  color: var(--diff-color, var(--text));
   background: #241d45;
   box-shadow: 0 0 10px rgba(124, 108, 255, 0.3);
 }
@@ -367,10 +362,42 @@ body {
 .member-diff {
   font-size: 12px;
 }
-.member-diff.diff-easy { color: var(--easy); }
-.member-diff.diff-normal { color: var(--normal); }
-.member-diff.diff-hard { color: var(--hard); }
-.member-diff.diff-oni { color: var(--oni); }
+.member-diff {
+  color: var(--diff-color, var(--sub));
+}
+.field-note {
+  font-size: 12px;
+  color: var(--sub);
+  align-self: center;
+}
+.miss-note {
+  font-size: 12px;
+  color: #ff7b7b;
+  font-weight: bold;
+}
+.mode-banner {
+  display: inline-block;
+  margin: 4px auto 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid #c084fc;
+  background: rgba(192, 132, 252, 0.12);
+  color: #e9d5ff;
+  font-size: 13px;
+}
+.mode-desc {
+  font-size: 13px;
+  color: var(--sub);
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: 4px;
+}
+.warlord-btn {
+  border-color: #c084fc;
+}
+.kills-label {
+  color: #ffb4b4;
+}
 .member-ready {
   font-size: 12px;
   color: var(--sub);
@@ -533,7 +560,7 @@ body {
   animation: enemyhit 0.18s;
 }
 @keyframes enemyhit {
-  0% { transform: translateX(0) scale(1); filter: brightness(2.5); }
+  0% { transform: translateX(0) scale(1); filter: var(--tint, none) brightness(2.5); }
   50% { transform: translateX(6px) scale(0.95); }
   100% { transform: translateX(0) scale(1); }
 }
@@ -547,6 +574,8 @@ body {
   height: 64px;
   image-rendering: pixelated;
   animation: bob 2.8s ease-in-out infinite;
+  /* 変異種の色違い（data.ts の EnemyKind.tint） */
+  filter: var(--tint, none);
 }
 .enemy-card.boss .enemy-sprite {
   width: 96px;
@@ -1079,6 +1108,21 @@ body {
 }
 .result-screen.lose .result-title {
   color: #94a3b8;
+}
+.result-screen.survival .result-title {
+  color: #e9d5ff;
+  text-shadow: 0 4px 0 #4c1d95;
+}
+.survival-score {
+  text-align: center;
+  line-height: 1.8;
+}
+.survival-kills {
+  font-size: 22px;
+}
+.survival-kills b {
+  font-size: 34px;
+  color: var(--gold);
 }
 .result-time {
   font-size: 17px;

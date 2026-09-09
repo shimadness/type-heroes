@@ -3,7 +3,7 @@ import type { Session } from "../App";
 import type { PlayerState, RoomState } from "../game/types";
 import { ENEMY_KINDS, STAGES, roleDef } from "../game/data";
 import { HostBrain } from "../game/host";
-import { allPlayers } from "../game/room";
+import { allPlayers, isSurvival } from "../game/room";
 import { alienFor, enAsset } from "../assets";
 import { fireAndForget } from "../net/store";
 
@@ -54,6 +54,7 @@ function awardTitles(players: [string, PlayerState][]): Record<string, TitleAwar
   give({ icon: "🔥", label: "コンボ王" }, (p) => p.stats?.maxCombo ?? 0, 5);
   give({ icon: "🛡️", label: "鉄壁（ぼうぎょ成功）" }, (p) => p.stats?.defended ?? 0);
   give({ icon: "⛑️", label: "救世主（そせい回数）" }, (p) => p.stats?.revived ?? 0);
+  give({ icon: "⚔️", label: "討伐王（さいだい撃破）" }, (p) => p.stats?.kills ?? 0);
 
   for (const [pid] of players) {
     if (out[pid].length === 0) out[pid].push({ icon: "🌟", label: "ムードメーカー" });
@@ -70,6 +71,8 @@ export function Result({ session, state, onLeave }: Props) {
   const { room } = session;
   const isHost = state.meta.hostId === room.myId;
   const cleared = state.meta.status === "clear";
+  const survival = isSurvival(state);
+  const kills = state.meta.kills ?? 0;
   const players = allPlayers(state).sort(
     (a, b) => (b[1].stats?.damage ?? 0) - (a[1].stats?.damage ?? 0)
   );
@@ -81,18 +84,40 @@ export function Result({ session, state, onLeave }: Props) {
   );
   const titles = useMemo(() => awardTitles(players), [players]);
   const brain = useMemo(() => new HostBrain(room), [room]);
-  const timeMs = cleared ? state.meta.clearedAt - state.meta.startedAt : 0;
+  const timeMs =
+    cleared || survival ? Math.max(0, state.meta.clearedAt - state.meta.startedAt) : 0;
   const lastStage = STAGES[STAGES.length - 1];
   const finalBoss = lastStage.waves[lastStage.waves.length - 1]
     .map((k) => ENEMY_KINDS[k])
     .find((k) => k?.boss);
 
   return (
-    <div className={`screen result-screen center ${cleared ? "win" : "lose"}`}>
+    <div
+      className={`screen result-screen center ${
+        survival ? "survival" : cleared ? "win" : "lose"
+      }`}
+    >
       <h1 className="result-title">
-        {cleared ? "🏆 ぜんステージクリア！！" : "💀 ぜんめつ…"}
+        {survival
+          ? "☠️ うぉーろーど しゅうりょう"
+          : cleared
+            ? "🏆 ぜんステージクリア！！"
+            : "💀 ぜんめつ…"}
       </h1>
-      {cleared && finalBoss && (
+      {survival && (
+        <div className="result-time survival-score">
+          <div className="survival-kills">
+            撃破 <b>{kills}</b> 体
+          </div>
+          <div>
+            WAVE {state.meta.wave + 1} まで到達 ／ 生存 {fmtTime(timeMs)}
+            {!session.isLocal && kills > 0 && (
+              <span className="rank-note">（ランキングに登録したよ）</span>
+            )}
+          </div>
+        </div>
+      )}
+      {!survival && cleared && finalBoss && (
         <>
           <div className="boss-win-line">
             <img
@@ -109,7 +134,7 @@ export function Result({ session, state, onLeave }: Props) {
           </div>
         </>
       )}
-      {!cleared && (
+      {!survival && !cleared && (
         <div className="result-time">もういちど ちからを合わせて挑もう！</div>
       )}
 
@@ -120,6 +145,7 @@ export function Result({ session, state, onLeave }: Props) {
               <th>なかま</th>
               <th>称号</th>
               <th>ダメージ</th>
+              <th>撃破</th>
               <th>回復</th>
               <th>打鍵</th>
               <th>せいかく</th>
@@ -151,6 +177,7 @@ export function Result({ session, state, onLeave }: Props) {
                     ))}
                   </td>
                   <td>{p.stats?.damage ?? 0}</td>
+                  <td>{p.stats?.kills ?? 0}</td>
                   <td>{p.stats?.heal ?? 0}</td>
                   <td>{t}</td>
                   <td>{acc}%</td>

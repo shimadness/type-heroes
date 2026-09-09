@@ -34,6 +34,10 @@ export const DIFF_LABEL: Record<Difficulty, string> = {
   oni: "おに",
 };
 
+/** 個人ハンデ（出題難易度）として選べる一覧。表示順。
+ *  チーム難易度（敵の強さ）の一覧は data.ts の TEAM_DIFFS（こちらはワード帯を持たない上位ティアを含む） */
+export const DIFFS: readonly Difficulty[] = ["easy", "normal", "hard", "oni"];
+
 type Bank = Record<GenreId, Record<Difficulty, WordEntry[]>>;
 
 const w = (d: string, k?: string): WordEntry => ({ d, k: k ?? d });

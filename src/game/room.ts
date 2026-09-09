@@ -13,7 +13,8 @@ import type {
 } from "./types";
 import type { Difficulty, GenreId } from "../typing/words";
 import { PLAYER_MAX_HP, TUNING, roleDef } from "./data";
-import type { RoleId } from "./types";
+import type { TeamDifficulty } from "./data";
+import type { GameMode, RoleId } from "./types";
 
 export const ROOT = "typing";
 
@@ -29,7 +30,7 @@ export function newPlayerId(): string {
 export function emptyStats(): PlayerStats {
   return {
     damage: 0, heal: 0, typed: 0, miss: 0, maxCombo: 0,
-    defended: 0, revived: 0, words: 0, startAt: 0,
+    defended: 0, revived: 0, words: 0, kills: 0, startAt: 0,
   };
 }
 
@@ -66,7 +67,8 @@ export class Room {
     store: Store,
     code: string,
     profile: JoinProfile,
-    teamDiff: Difficulty
+    teamDiff: TeamDifficulty,
+    mode: GameMode = "story"
   ): Promise<Room> {
     const myId = newPlayerId();
     const room = new Room(store, code, myId);
@@ -74,6 +76,8 @@ export class Room {
       createdAt: Date.now(),
       hostId: myId,
       diff: teamDiff,
+      mode,
+      kills: 0,
       status: "lobby",
       stageIdx: 0,
       wave: 0,
@@ -148,7 +152,7 @@ export class Room {
     return this.store.update(this.myPath, partial as Record<string, unknown>);
   }
 
-  setTeamDiff(diff: Difficulty) {
+  setTeamDiff(diff: TeamDifficulty) {
     return this.store.update(`${this.base}/meta`, { diff });
   }
 
@@ -253,6 +257,7 @@ export class Room {
         words: s.words + (delta.words ?? 0),
         defended: s.defended + (delta.defended ?? 0),
         revived: s.revived + (delta.revived ?? 0),
+        kills: (s.kills ?? 0) + (delta.kills ?? 0),
         maxCombo: Math.max(s.maxCombo, delta.maxCombo ?? 0),
         startAt: s.startAt || delta.startAt || 0,
       };
@@ -336,4 +341,9 @@ export function allPlayers(state: RoomState): [string, PlayerState][] {
 
 export function aliveEnemies(state: RoomState): [string, EnemyState][] {
   return Object.entries(state.enemies ?? {}).filter(([, e]) => e.alive);
+}
+
+/** うぉーろーど（サバイバル）部屋か */
+export function isSurvival(state: RoomState): boolean {
+  return state.meta?.mode === "survival";
 }

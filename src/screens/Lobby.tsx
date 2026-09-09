@@ -1,12 +1,13 @@
 import { useMemo } from "react";
 import type { Session } from "../App";
 import type { RoomState } from "../game/types";
-import { ROLES, roleDef } from "../game/data";
-import { DIFF_LABEL, type Difficulty } from "../typing/words";
+import { DIFF_TUNING, ROLES, SURVIVAL, TEAM_DIFFS, roleDef } from "../game/data";
+import { DIFFS, DIFF_LABEL } from "../typing/words";
 import { HostBrain } from "../game/host";
-import { allPlayers } from "../game/room";
+import { allPlayers, isSurvival } from "../game/room";
 import { alienFor } from "../assets";
 import { fireAndForget } from "../net/store";
+import type { CSSProperties } from "react";
 
 interface Props {
   session: Session;
@@ -14,12 +15,14 @@ interface Props {
   onLeave: () => void;
 }
 
-const DIFFS: Difficulty[] = ["easy", "normal", "hard", "oni"];
+const diffStyle = (color: string) => ({ "--diff-color": color } as CSSProperties);
 
 export function Lobby({ session, state, onLeave }: Props) {
   const { room } = session;
   const me = state.players?.[room.myId];
   const isHost = state.meta.hostId === room.myId;
+  const survival = isSurvival(state);
+  const teamTuning = DIFF_TUNING[state.meta.diff] ?? DIFF_TUNING.normal;
   const players = allPlayers(state).sort(
     (a, b) => a[1].joinedAt - b[1].joinedAt
   );
@@ -32,6 +35,11 @@ export function Lobby({ session, state, onLeave }: Props) {
     <div className="screen lobby-screen">
       <div className="lobby-head">
         <h2>🏕️ じゅんびのやかた</h2>
+        {survival && (
+          <div className="mode-banner" title={`${SURVIVAL.bossEvery}ウェーブごとにボス。全滅したら終了`}>
+            ☠️ うぉーろーど（サバイバル）— たおした数をきそう
+          </div>
+        )}
         {!session.isLocal && (
           <div className="pw-banner">
             あいことば: <b>{room.code}</b>
@@ -52,7 +60,9 @@ export function Lobby({ session, state, onLeave }: Props) {
                 {pid === state.meta.hostId && <span className="host-badge">👑部屋主</span>}
                 {pid === room.myId && <span className="me-badge">じぶん</span>}
               </span>
-              <span className={`member-diff diff-${p.diff}`}>{DIFF_LABEL[p.diff]}</span>
+              <span className="member-diff" style={diffStyle(DIFF_TUNING[p.diff].color)}>
+                {DIFF_LABEL[p.diff]}
+              </span>
               <span className={`member-ready ${p.ready ? "on" : ""}`}>
                 {pid === state.meta.hostId ? "─" : p.ready ? "じゅんびOK!" : "じゅんび中…"}
               </span>
@@ -86,7 +96,8 @@ export function Lobby({ session, state, onLeave }: Props) {
                 {DIFFS.map((d) => (
                   <button
                     key={d}
-                    className={`diff-btn diff-${d} ${me.diff === d ? "sel" : ""}`}
+                    className={`diff-btn ${me.diff === d ? "sel" : ""}`}
+                    style={diffStyle(DIFF_TUNING[d].color)}
                     onClick={() => fireAndForget("難易度変更", room.setProfile({ diff: d }))}
                   >
                     {DIFF_LABEL[d]}
@@ -95,22 +106,35 @@ export function Lobby({ session, state, onLeave }: Props) {
               </div>
             </div>
 
-            {isHost && (
-              <div className="field">
-                <span>てきの強さ（チーム難易度）</span>
+            <div className="field">
+              <span>てきの強さ（チーム難易度）</span>
+              {isHost ? (
                 <div className="diff-row">
-                  {DIFFS.map((d) => (
+                  {TEAM_DIFFS.map((d) => (
                     <button
                       key={d}
-                      className={`diff-btn diff-${d} ${state.meta.diff === d ? "sel" : ""}`}
+                      className={`diff-btn ${state.meta.diff === d ? "sel" : ""}`}
+                      style={diffStyle(DIFF_TUNING[d].color)}
                       onClick={() => fireAndForget("チーム難易度変更", room.setTeamDiff(d))}
                     >
-                      {DIFF_LABEL[d]}
+                      {DIFF_TUNING[d].label}
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="diff-row">
+                  <span className="diff-btn sel" style={diffStyle(teamTuning.color)}>
+                    {teamTuning.label}
+                  </span>
+                  <span className="field-note">（部屋主が決める）</span>
+                </div>
+              )}
+              {teamTuning.missSelfDamage > 0 && (
+                <div className="miss-note">
+                  💥 ミスタイプすると 自分のHPが -{teamTuning.missSelfDamage}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -133,7 +157,7 @@ export function Lobby({ session, state, onLeave }: Props) {
             disabled={!everyoneReady}
             onClick={() => fireAndForget("ゲーム開始", brain.startGame(state))}
           >
-            ⚔️ ぼうけんに出発！
+            {survival ? "☠️ うぉーろーど 開始！" : "⚔️ ぼうけんに出発！"}
             {!everyoneReady && <span className="btn-note">（全員のじゅんびOK待ち）</span>}
           </button>
         )}

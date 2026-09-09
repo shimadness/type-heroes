@@ -1,4 +1,4 @@
-import type { Difficulty, GenreId } from "../typing/words";
+import { DIFF_LABEL, type Difficulty, type GenreId } from "../typing/words";
 import type { EquipId, RoleId } from "./types";
 
 // ============================================================
@@ -75,6 +75,7 @@ export interface EnemyKind {
   atk: number; // 攻撃力
   atkInterval: number; // 攻撃間隔ms
   gimmicks?: ("ink" | "shuffle" | "katakana")[];
+  tint?: string; // 色違い（変異種）用の CSS filter。専用ドット絵ができたら sprite を差し替えて外す
   enc: string; // 出現時の一文
   win: string; // 撃破時の一文（ボスで表示）
 }
@@ -153,6 +154,39 @@ export const ENEMY_KINDS: Record<string, EnemyKind> = {
     enc: "首を1本直すと2本生える怪物が咆哮した！",
     win: "根本原因の心臓を貫いた！！",
   },
+
+  // ---- 変異種（うぉーろーど専用。STAGES に載せていないのでストーリーには出ない）----
+  zombieproc: {
+    id: "zombieproc", name: "ゾンビプロセス", sprite: "mon-nullpo",
+    tint: "hue-rotate(90deg) saturate(1.3)",
+    baseHp: 85, atk: 13, atkInterval: 8000,
+    enc: "殺しても消えないプロセスがうろついている！", win: "親に wait させて成仏させた！",
+  },
+  racecond: {
+    id: "racecond", name: "レースコンディション鳥", sprite: "mon-offbyone",
+    tint: "hue-rotate(200deg)",
+    baseHp: 75, atk: 12, atkInterval: 6500,
+    enc: "2羽が同時に同じ実を狙って突っ込んでくる！", win: "ロックをかけて順番に捕まえた！",
+  },
+  oomkiller: {
+    id: "oomkiller", name: "OOMキラー", sprite: "mon-memleak",
+    tint: "hue-rotate(-60deg) saturate(1.6)",
+    baseHp: 120, atk: 15, atkInterval: 10000,
+    enc: "メモリを食い尽くした巨大スライムが迫る！", win: "スワップを増やしてしのぎ切った！",
+  },
+  segfault: {
+    id: "segfault", name: "セグフォ", sprite: "mon-mojibake",
+    tint: "hue-rotate(300deg) contrast(1.3)",
+    baseHp: 90, atk: 14, atkInterval: 8500,
+    enc: "触ってはいけない番地から何かが這い出した！", win: "境界チェックで封印した！",
+  },
+  stackdragon: {
+    id: "stackdragon", name: "スタックオーバーフロー竜", sprite: "mon-legacydragon", boss: true,
+    tint: "hue-rotate(160deg)",
+    baseHp: 520, atk: 22, atkInterval: 6800, gimmicks: ["ink", "shuffle", "katakana"],
+    enc: "再帰の底から無限に積み上がる竜が現れた！",
+    win: "終了条件を書き足して積み上がりを止めた！！",
+  },
 };
 
 // ============================================================
@@ -196,21 +230,61 @@ export const STAGES: StageDef[] = [
 
 // ============================================================
 // 難易度（チーム基準 = 敵の強さ補正）
+//
+// ★新ティアを足すときは DIFF_TUNING にエントリを1つ追加するだけ。
+//   型（TeamDifficulty）・一覧（TEAM_DIFFS）・ロビー/ランキングのボタン・
+//   バトル画面のラベル・チュートリアル完了画面の説明はすべてここから導出される。
+//   出題ワードは words.ts の Difficulty（easy〜oni）までしか無いので、
+//   上位ティアは「敵の強さ」だけを持ち、個人ハンデ側には出ない。
 // ============================================================
 export interface DiffTuning {
+  label: string; // 表示名
+  color: string; // ボタン・バッジの色（CSS）
   enemyHpMult: number;
   enemyAtkMult: number;
   atkIntervalMult: number; // 小さいほど敵の攻撃が速い
   defenseTime: number; // 防御ワードの猶予ms
   ragePerSec: number; // ボス怒りゲージ上昇/秒
+  missSelfDamage: number; // ミスタイプ1回の自傷ダメージ（0=なし、コンボが切れるだけ）
 }
 
-export const DIFF_TUNING: Record<Difficulty, DiffTuning> = {
-  easy: { enemyHpMult: 0.7, enemyAtkMult: 0.7, atkIntervalMult: 1.4, defenseTime: 6000, ragePerSec: 1.2 },
-  normal: { enemyHpMult: 1.0, enemyAtkMult: 1.0, atkIntervalMult: 1.0, defenseTime: 5000, ragePerSec: 1.8 },
-  hard: { enemyHpMult: 1.4, enemyAtkMult: 1.3, atkIntervalMult: 0.8, defenseTime: 4200, ragePerSec: 2.4 },
-  oni: { enemyHpMult: 1.9, enemyAtkMult: 1.6, atkIntervalMult: 0.65, defenseTime: 3500, ragePerSec: 3.0 },
-};
+export const DIFF_TUNING = {
+  easy: {
+    label: DIFF_LABEL.easy, color: "#4ade80",
+    enemyHpMult: 0.7, enemyAtkMult: 0.7, atkIntervalMult: 1.4, defenseTime: 6000, ragePerSec: 1.2,
+    missSelfDamage: 0,
+  },
+  normal: {
+    label: DIFF_LABEL.normal, color: "#60a5fa",
+    enemyHpMult: 1.0, enemyAtkMult: 1.0, atkIntervalMult: 1.0, defenseTime: 5000, ragePerSec: 1.8,
+    missSelfDamage: 0,
+  },
+  hard: {
+    label: DIFF_LABEL.hard, color: "#fb923c",
+    enemyHpMult: 1.4, enemyAtkMult: 1.3, atkIntervalMult: 0.8, defenseTime: 4200, ragePerSec: 2.4,
+    missSelfDamage: 0,
+  },
+  oni: {
+    label: DIFF_LABEL.oni, color: "#f43f5e",
+    enemyHpMult: 1.9, enemyAtkMult: 1.6, atkIntervalMult: 0.65, defenseTime: 3500, ragePerSec: 3.0,
+    missSelfDamage: 0,
+  },
+  // ここから上位ティア（ワードは「おに」を流用）。ミス自傷で差別化する
+  nightmare: {
+    label: "ないとめあ", color: "#c084fc",
+    enemyHpMult: 2.4, enemyAtkMult: 1.9, atkIntervalMult: 0.55, defenseTime: 3000, ragePerSec: 3.6,
+    missSelfDamage: 2,
+  },
+} satisfies Record<string, DiffTuning>;
+
+/** チーム難易度（敵の強さ）の id。DIFF_TUNING のキーから導出 */
+export type TeamDifficulty = keyof typeof DIFF_TUNING;
+/** チーム難易度の一覧（定義順＝表示順） */
+export const TEAM_DIFFS = Object.keys(DIFF_TUNING) as TeamDifficulty[];
+export const teamDiffDef = (d: TeamDifficulty): DiffTuning => DIFF_TUNING[d];
+// 個人ハンデ（Difficulty）は必ずチーム難易度にも存在すること（Title の初期値 "normal" 等の保証）
+const _assertWordDiffsAreTeamDiffs: Record<Difficulty, DiffTuning> = DIFF_TUNING;
+void _assertWordDiffsAreTeamDiffs;
 
 export const PLAYER_MAX_HP = 100;
 
@@ -231,7 +305,20 @@ export const TUNING = {
   unisonTime: 12000,
   reviveHpRatio: 0.4,
   rageAtkMult: 2.2, // 怒り爆発時の全体攻撃倍率
-  missSelfDamage: 0, // ミスタイプの自傷（0=なし、コンボが切れるだけ）
+  stageHealRatio: 0.3, // ステージクリア／サバイバルのボス撃破後の回復（maxHp比）
   buffMult: 1.2,
   buffDuration: 8000,
+};
+
+// ============================================================
+// うぉーろーど（サバイバル）: 無限ウェーブの成長パラメータ
+// ============================================================
+export const SURVIVAL = {
+  bossEvery: 5, // n ウェーブごとにボス（撃破後に回復＋装備ドロップ）
+  baseEnemies: 2, // 最初の雑魚ウェーブの体数
+  maxEnemies: 4,
+  enemiesGrowEvery: 3, // n ウェーブごとに雑魚が1体増える
+  hpGrowthPerWave: 0.12, // 敵HP = 基準 × (1 + これ × wave)
+  atkGrowthPerWave: 0.05, // 敵攻撃 = 基準 × min(atkGrowthMax, 1 + これ × wave)
+  atkGrowthMax: 2.0,
 };

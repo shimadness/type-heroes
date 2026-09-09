@@ -3,7 +3,8 @@ import type { Store } from "./net/store";
 import { LocalStore } from "./net/store";
 import { Room, sanitizeRoomCode } from "./game/room";
 import type { JoinProfile } from "./game/room";
-import type { Difficulty } from "./typing/words";
+import type { TeamDifficulty } from "./game/data";
+import type { GameMode } from "./game/types";
 import { useRoom } from "./hooks/useRoom";
 import { Title } from "./screens/Title";
 import { Lobby } from "./screens/Lobby";
@@ -34,14 +35,21 @@ export default function App() {
   const [error, setError] = useState("");
   const state = useRoom(session?.room ?? null);
 
-  const startSolo = useCallback(async (profile: JoinProfile, teamDiff: Difficulty) => {
-    const store = new LocalStore();
-    const room = await Room.create(store, "solo", profile, teamDiff);
-    setSession({ store, room, isLocal: true });
-  }, []);
+  const startSolo = useCallback(
+    async (profile: JoinProfile, teamDiff: TeamDifficulty, mode: GameMode) => {
+      const store = new LocalStore();
+      if (import.meta.env.DEV) {
+        // 開発時の確認用: コンソールから await __thStore.read("typing/...") で中身を見られる
+        (window as unknown as { __thStore?: Store }).__thStore = store;
+      }
+      const room = await Room.create(store, "solo", profile, teamDiff, mode);
+      setSession({ store, room, isLocal: true });
+    },
+    []
+  );
 
   const createRoom = useCallback(
-    async (pw: string, profile: JoinProfile, teamDiff: Difficulty) => {
+    async (pw: string, profile: JoinProfile, teamDiff: TeamDifficulty, mode: GameMode) => {
       try {
         const { FirebaseStore } = await import("./net/store");
         const store = new FirebaseStore();
@@ -55,7 +63,7 @@ export default function App() {
         ) {
           throw new Error("そのあいことばは使用中！べつのあいことばにするか「あいことばで参加」してね");
         }
-        const room = await Room.create(store, code, profile, teamDiff);
+        const room = await Room.create(store, code, profile, teamDiff, mode);
         setSession({ store, room, isLocal: false });
         setError("");
       } catch (e) {

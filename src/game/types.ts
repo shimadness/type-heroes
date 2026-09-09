@@ -1,4 +1,5 @@
 import type { Difficulty, GenreId } from "../typing/words";
+import type { TeamDifficulty } from "./data";
 
 export type RoleId = "attacker" | "healer" | "tank" | "buffer";
 export type EquipId =
@@ -7,6 +8,9 @@ export type EquipId =
   | "staff" // 回復の杖: 回復+25%
   | "shield" // 守りの盾: 被ダメ-20%
   | "boots"; // 疾風のブーツ: ゲージ+30%
+
+/** ゲームモード。story = 3ステージ制、survival = うぉーろーど（無限ウェーブ・撃破数勝負） */
+export type GameMode = "story" | "survival";
 
 export type RoomStatus =
   | "lobby"
@@ -39,6 +43,7 @@ export interface PlayerStats {
   defended: number; // 防御成功回数
   revived: number; // 蘇生した回数
   words: number; // 完了ワード数
+  kills: number; // とどめを刺した敵の数
   startAt: number; // WPM計測用
 }
 
@@ -48,6 +53,7 @@ export interface EnemyState {
   maxHp: number;
   alive: boolean;
   weakness: GenreId;
+  atkMult?: number; // サバイバルの攻撃成長。story では書かない（RTDB は undefined を拒否する）
 }
 
 export interface TelegraphEvent {
@@ -103,7 +109,9 @@ export interface BuffState {
 export interface RoomMeta {
   createdAt: number;
   hostId: string;
-  diff: Difficulty; // チーム基準難易度（敵の強さ）
+  diff: TeamDifficulty; // チーム基準難易度（敵の強さ）
+  mode?: GameMode; // 未定義 = story（旧部屋との互換）
+  kills?: number; // チーム総撃破数（サバイバルのスコア。ホストが加算）
   status: RoomStatus;
   stageIdx: number;
   wave: number;

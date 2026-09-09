@@ -11,9 +11,11 @@ import {
   ENEMY_KINDS,
   EQUIPS,
   STAGES,
+  SURVIVAL,
   TUNING,
 } from "./data";
-import { Room, ROOT, aliveEnemies, allPlayers, alivePlayers } from "./room";
+import { GENRES, type GenreId } from "../typing/words";
+import { Room, ROOT, aliveEnemies, allPlayers, alivePlayers, isSurvival } from "./room";
 import { roleDef } from "./data";
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
@@ -50,6 +52,7 @@ export class HostBrain {
       "meta/clearedAt": 0,
       "meta/rage": 0,
       "meta/gauge": 0,
+      "meta/kills": 0,
       chain: null,
       buff: null,
       unison: null,
@@ -61,18 +64,19 @@ export class HostBrain {
       updates[`players/${pid}/equip`] = "none";
       updates[`players/${pid}/stats`] = {
         damage: 0, heal: 0, typed: 0, miss: 0, maxCombo: 0,
-        defended: 0, revived: 0, words: 0, startAt: Date.now(),
+        defended: 0, revived: 0, words: 0, kills: 0, startAt: Date.now(),
       };
     }
-    updates["enemies"] = this.buildWave(state, 0, 0, players.length);
+    const enemies = this.waveFor(state, 0, 0, players.length);
+    updates["enemies"] = enemies;
     await this.store.update(this.base, updates);
-    await this.pushEncounter(0, 0);
+    await this.pushEncounter(enemies);
     this.resetSchedules();
   }
 
   /** ウェーブ先頭の敵（ボス優先）の遭遇セリフを流す */
-  private async pushEncounter(stageIdx: number, wave: number) {
-    const kinds = STAGES[stageIdx].waves[wave].map((k) => ENEMY_KINDS[k]);
+  private async pushEncounter(enemies: Record<string, EnemyState>) {
+    const kinds = Object.values(enemies).map((e) => ENEMY_KINDS[e.kind]);
     const lead = kinds.find((k) => k.boss) ?? kinds[0];
     if (!lead) return;
     await this.room.pushEvent({
@@ -82,6 +86,46 @@ export class HostBrain {
     } as never);
   }
 
+  /** モードに応じたウェーブ生成 */
+  private waveFor(
+    state: RoomState,
+    stageIdx: number,
+    wave: number,
+    playerCount: number
+  ): Record<string, EnemyState> {
+    return isSurvival(state)
+      ? this.buildSurvivalWave(state, wave, playerCount)
+      : this.buildWave(state, stageIdx, wave, playerCount);
+  }
+
+  private makeEnemies(
+    kinds: string[],
+    hpMult: number,
+    weaknessPool: GenreId[],
+    playerCount: number,
+    atkMult = 1
+  ): Record<string, EnemyState> {
+    const out: Record<string, EnemyState> = {};
+    kinds.forEach((kindId, i) => {
+      const kind = ENEMY_KINDS[kindId];
+      const hp = Math.round(
+        kind.baseHp * hpMult * (0.5 + 0.5 * Math.max(1, playerCount))
+      );
+      const e: EnemyState = {
+        kind: kindId,
+        hp,
+        maxHp: hp,
+        alive: true,
+        weakness: pick(weaknessPool),
+      };
+      // RTDB は undefined を拒否するので、成長があるときだけキーを持たせる
+      if (atkMult !== 1) e.atkMult = Math.round(atkMult * 100) / 100;
+      out[String(i)] = e;
+    });
+    return out;
+  }
+
+  /** ストーリー: STAGES の定義どおり */
   private buildWave(
     state: RoomState,
     stageIdx: number,
@@ -90,22 +134,58 @@ export class HostBrain {
   ): Record<string, EnemyState> {
     const stage = STAGES[stageIdx];
     const tuning = DIFF_TUNING[state.meta.diff];
-    const kinds = stage.waves[wave];
-    const out: Record<string, EnemyState> = {};
-    kinds.forEach((kindId, i) => {
-      const kind = ENEMY_KINDS[kindId];
-      const hp = Math.round(
-        kind.baseHp * tuning.enemyHpMult * (0.5 + 0.5 * Math.max(1, playerCount))
+    return this.makeEnemies(
+      stage.waves[wave],
+      tuning.enemyHpMult,
+      stage.weaknessPool,
+      playerCount
+    );
+  }
+
+  /** うぉーろーど: wave 番号（0始まり）から無限に生成。bossEvery ごとにボス */
+  private buildSurvivalWave(
+    state: RoomState,
+    wave: number,
+    playerCount: number
+  ): Record<string, EnemyState> {
+    const tuning = DIFF_TUNING[state.meta.diff];
+    const all = Object.values(ENEMY_KINDS);
+    const bosses = all.filter((k) => k.boss);
+    const mobs = all.filter((k) => !k.boss);
+    const kinds: string[] = [];
+    if (HostBrain.isSurvivalBossWave(wave)) {
+      const b = (wave + 1) / SURVIVAL.bossEvery - 1;
+      const boss = b < bosses.length ? bosses[b] : pick(bosses);
+      kinds.push(boss.id);
+      if (b >= 2) kinds.push(pick(mobs).id); // 3体目以降のボスは雑魚を1体連れてくる
+    } else {
+      const n = Math.min(
+        SURVIVAL.maxEnemies,
+        SURVIVAL.baseEnemies + Math.floor(wave / SURVIVAL.enemiesGrowEvery)
       );
-      out[String(i)] = {
-        kind: kindId,
-        hp,
-        maxHp: hp,
-        alive: true,
-        weakness: pick(stage.weaknessPool),
-      };
-    });
-    return out;
+      for (let i = 0; i < n; i++) kinds.push(pick(mobs).id);
+    }
+    const hpMult = tuning.enemyHpMult * (1 + SURVIVAL.hpGrowthPerWave * wave);
+    const atkMult = Math.min(
+      SURVIVAL.atkGrowthMax,
+      1 + SURVIVAL.atkGrowthPerWave * wave
+    );
+    return this.makeEnemies(
+      kinds,
+      hpMult,
+      GENRES.map((g) => g.id),
+      playerCount,
+      atkMult
+    );
+  }
+
+  static isSurvivalBossWave(wave: number): boolean {
+    return (wave + 1) % SURVIVAL.bossEvery === 0;
+  }
+
+  /** サバイバルの背景はボスを倒すごとに STAGES を循環 */
+  static survivalStageIdx(wave: number): number {
+    return Math.floor(wave / SURVIVAL.bossEvery) % STAGES.length;
   }
 
   private resetSchedules() {
@@ -127,7 +207,21 @@ export class HostBrain {
     if (alive.length === 0 && allPlayers(state).length > 0) {
       if (!this.transitioning) {
         this.transitioning = true;
-        await this.store.update(`${this.base}/meta`, { status: "gameover" });
+        if (isSurvival(state)) {
+          // 倒しかけのウェーブの分も撃破数に含める
+          const kills =
+            (state.meta.kills ?? 0) +
+            Object.values(state.enemies ?? {}).filter((e) => !e.alive).length;
+          // ランキング書き込みが失敗（ルール未適用など）しても進行が止まらないよう、status を先に確定する
+          await this.store.update(`${this.base}/meta`, {
+            status: "gameover",
+            clearedAt: now,
+            kills,
+          });
+          await this.writeSurvivalRanking(state, kills, now);
+        } else {
+          await this.store.update(`${this.base}/meta`, { status: "gameover" });
+        }
       }
       return;
     }
@@ -227,6 +321,7 @@ export class HostBrain {
     }
     const dmg = Math.round(
       kind.atk *
+        (e.atkMult ?? 1) *
         tuning.enemyAtkMult *
         (allTarget ? TUNING.rageAtkMult : 1) *
         rand(0.85, 1.15)
@@ -289,18 +384,20 @@ export class HostBrain {
   // ---------- ウェーブ / ステージ進行 ----------
 
   private async advanceWave(state: RoomState) {
+    if (isSurvival(state)) return this.advanceSurvivalWave(state);
     const { stageIdx, wave } = state.meta;
     const stage = STAGES[stageIdx];
     const playerCount = allPlayers(state).length;
 
     if (wave + 1 < stage.waves.length) {
       // 次ウェーブ
+      const enemies = this.buildWave(state, stageIdx, wave + 1, playerCount);
       await this.store.update(this.base, {
-        enemies: this.buildWave(state, stageIdx, wave + 1, playerCount),
+        enemies,
         "meta/wave": wave + 1,
         "meta/rage": 0,
       });
-      await this.pushEncounter(stageIdx, wave + 1);
+      await this.pushEncounter(enemies);
       this.resetSchedules();
     } else if (stageIdx + 1 < STAGES.length) {
       // ステージクリア → 装備ドロップ
@@ -314,6 +411,48 @@ export class HostBrain {
         clearedAt,
       });
       await this.writeRanking(state, clearedAt);
+    }
+  }
+
+  /** うぉーろーど: 撃破数を積んで次ウェーブへ。ボス撃破直後は休憩（回復＋装備） */
+  private async advanceSurvivalWave(state: RoomState) {
+    const { wave } = state.meta;
+    const next = wave + 1;
+    const playerCount = allPlayers(state).length;
+    const kills =
+      (state.meta.kills ?? 0) + Object.keys(state.enemies ?? {}).length;
+    const afterBoss = HostBrain.isSurvivalBossWave(wave);
+    if (afterBoss) await this.dropEquips(state);
+
+    const enemies = this.buildSurvivalWave(state, next, playerCount);
+    const updates: Record<string, unknown> = {
+      enemies,
+      "meta/wave": next,
+      "meta/kills": kills,
+      "meta/rage": 0,
+      "meta/stageIdx": HostBrain.survivalStageIdx(next),
+    };
+    if (afterBoss) this.restUpdates(state, updates);
+    await this.store.update(this.base, updates);
+    if (afterBoss) {
+      await this.room.pushEvent({
+        type: "info",
+        text: "🎁 そうびを手に入れた！ HPがかいふくした！",
+        at: Date.now(),
+      } as never);
+    }
+    await this.pushEncounter(enemies);
+    this.resetSchedules();
+  }
+
+  /** 休憩: 気絶者は復活・生存者は回復（ステージクリア後／サバイバルのボス撃破後で共用） */
+  private restUpdates(state: RoomState, updates: Record<string, unknown>) {
+    for (const [pid, p] of allPlayers(state)) {
+      const hp = p.alive
+        ? Math.min(p.maxHp, Math.round(p.hp + p.maxHp * TUNING.stageHealRatio))
+        : Math.round(p.maxHp * TUNING.reviveHpRatio);
+      updates[`players/${pid}/hp`] = hp;
+      updates[`players/${pid}/alive`] = true;
     }
   }
 
@@ -340,8 +479,9 @@ export class HostBrain {
   async nextStage(state: RoomState) {
     const stageIdx = state.meta.stageIdx + 1;
     const playerCount = allPlayers(state).length;
+    const enemies = this.buildWave(state, stageIdx, 0, playerCount);
     const updates: Record<string, unknown> = {
-      enemies: this.buildWave(state, stageIdx, 0, playerCount),
+      enemies,
       "meta/stageIdx": stageIdx,
       "meta/wave": 0,
       "meta/status": "battle",
@@ -350,16 +490,10 @@ export class HostBrain {
       unison: null,
       events: null,
     };
-    // 気絶者は40%で復活・全員30%回復してから次ステージへ
-    for (const [pid, p] of allPlayers(state)) {
-      const hp = p.alive
-        ? Math.min(p.maxHp, Math.round(p.hp + p.maxHp * 0.3))
-        : Math.round(p.maxHp * TUNING.reviveHpRatio);
-      updates[`players/${pid}/hp`] = hp;
-      updates[`players/${pid}/alive`] = true;
-    }
+    // 気絶者は復活・全員回復してから次ステージへ
+    this.restUpdates(state, updates);
     await this.store.update(this.base, updates);
-    await this.pushEncounter(stageIdx, 0);
+    await this.pushEncounter(enemies);
     this.resetSchedules();
   }
 
@@ -371,6 +505,7 @@ export class HostBrain {
       "meta/wave": 0,
       "meta/rage": 0,
       "meta/gauge": 0,
+      "meta/kills": 0,
       enemies: null,
       events: null,
       chain: null,
@@ -392,6 +527,23 @@ export class HostBrain {
       names,
       timeMs,
       at: clearedAt,
+    });
+  }
+
+  /** うぉーろーど: 撃破数ランキング（typing/survival/{diff}）。1体も倒せなかった回は記録しない */
+  private async writeSurvivalRanking(
+    state: RoomState,
+    kills: number,
+    endedAt: number
+  ) {
+    if (kills <= 0) return;
+    const names = allPlayers(state).map(([, p]) => p.name);
+    await this.store.push(`${ROOT}/survival/${state.meta.diff}`, {
+      names,
+      kills,
+      waves: state.meta.wave + 1,
+      timeMs: Math.max(1, endedAt - state.meta.startedAt),
+      at: endedAt,
     });
   }
 }

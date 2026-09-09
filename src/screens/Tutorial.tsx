@@ -428,7 +428,7 @@ export function Tutorial({ onExit }: Props) {
           </div>
           <div className="tut-sum-row">
             <span>{roleDef("healer").icon}</span>
-            <span>ヒーラーが1人いると安定。ロールは部屋で変えられる</span>
+            <span>ヒーラーが1人いると安定。ロールとなまえは部屋（じゅんびのやかた）で決める</span>
           </div>
           <div className="tut-sum-row">
             <span>🏕️</span>

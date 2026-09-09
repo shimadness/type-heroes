@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Session } from "../App";
 import type { RoomState } from "../game/types";
 import { DIFF_TUNING, ROLES, SURVIVAL, TEAM_DIFFS, roleDef } from "../game/data";
@@ -30,6 +30,20 @@ export function Lobby({ session, state, onLeave }: Props) {
     players.length > 0 && players.every(([pid, p]) => p.ready || pid === state.meta.hostId);
 
   const brain = useMemo(() => new HostBrain(room), [room]);
+
+  // なまえは打鍵ごとにRTDBへ送らず、入力欄を離れたときにまとめて確定する
+  const [nameDraft, setNameDraft] = useState(me?.name ?? "");
+  useEffect(() => {
+    if (me) setNameDraft(me.name);
+  }, [me?.name]);
+  const commitName = () => {
+    const name = nameDraft.trim() || "ゆうしゃ";
+    setNameDraft(name);
+    try {
+      localStorage.setItem("th_name", name);
+    } catch {}
+    if (me && name !== me.name) fireAndForget("なまえ変更", room.setProfile({ name }));
+  };
 
   return (
     <div className="screen lobby-screen">
@@ -72,8 +86,22 @@ export function Lobby({ session, state, onLeave }: Props) {
 
         {me && !room.spectator && (
           <div className="my-setup">
+            <label className="field">
+              <span>なまえ</span>
+              <input
+                value={nameDraft}
+                maxLength={10}
+                placeholder="ゆうしゃ"
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+            </label>
+
             <div className="field">
-              <span>ロールへんこう</span>
+              <span>ロール（職業）</span>
               <div className="role-grid">
                 {ROLES.map((r) => (
                   <button

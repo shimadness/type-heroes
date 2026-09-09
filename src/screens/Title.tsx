@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JoinProfile } from "../game/room";
-import { ROLES, SURVIVAL, type TeamDifficulty } from "../game/data";
-import type { GameMode, RoleId } from "../game/types";
+import { SURVIVAL, type TeamDifficulty } from "../game/data";
+import type { GameMode } from "../game/types";
 import { alienFor, enAsset } from "../assets";
 
 interface Props {
@@ -14,8 +14,9 @@ interface Props {
   onTutorial: () => void;
 }
 
-// 画面内のセットアップ段階（warlord = うぉーろーどのサブメニュー）
-type Mode = "menu" | "warlord" | "solo" | "create" | "join" | "spectate";
+// 画面内のセットアップ段階（warlord = うぉーろーどのサブメニュー）。
+// ソロはパネルを出さず、ボタンを押したら即ロビーへ行く（設定は全部ロビーで決める）
+type Mode = "menu" | "warlord" | "create" | "join" | "spectate";
 
 export function Title(p: Props) {
   const [mode, setMode] = useState<Mode>("menu");
@@ -25,9 +26,8 @@ export function Title(p: Props) {
     () => localStorage.getItem("th_name") ?? ""
   );
   const [pw, setPw] = useState("");
-  const [role, setRole] = useState<RoleId>("attacker");
-  // 難易度はロビーで決める（ここで選ばせるとロビーの設定と二重になる）。
-  // これはその初期値でしかない。
+  // ロールと難易度はロビーで決める（ここで選ばせるとロビーの設定と二重になる）。
+  // これらはその初期値でしかない。
   const diff: TeamDifficulty = "normal";
   const [busy, setBusy] = useState(false);
 
@@ -35,7 +35,7 @@ export function Title(p: Props) {
     try {
       localStorage.setItem("th_name", name);
     } catch {}
-    return { name: name || "ゆうしゃ", role, diff };
+    return { name: name || "ゆうしゃ", role: "attacker", diff };
   };
 
   const go = async (fn: () => void) => {
@@ -75,7 +75,11 @@ export function Title(p: Props) {
           <button className="btn big" onClick={() => setMode("join")}>
             🤝 あいことばで参加
           </button>
-          <button className="btn big" onClick={() => setMode("solo")}>
+          <button
+            className="btn big"
+            disabled={busy}
+            onClick={() => go(() => p.onSolo(profile(), diff, "story"))}
+          >
             🗡️ ひとりで特訓
           </button>
           <button className="btn big warlord-btn" onClick={() => setMode("warlord")}>
@@ -108,10 +112,8 @@ export function Title(p: Props) {
           </button>
           <button
             className="btn big"
-            onClick={() => {
-              setGameMode("survival");
-              setMode("solo");
-            }}
+            disabled={busy}
+            onClick={() => go(() => p.onSolo(profile(), diff, "survival"))}
           >
             🗡️ ひとりで挑む
           </button>
@@ -137,41 +139,18 @@ export function Title(p: Props) {
                   onChange={(e) => setName(e.target.value)}
                 />
               </label>
-
-              <div className="field">
-                <span>ロール（職業）</span>
-                <div className="role-grid">
-                  {ROLES.map((r) => (
-                    <button
-                      key={r.id}
-                      className={`role-card ${role === r.id ? "sel" : ""}`}
-                      onClick={() => setRole(r.id)}
-                      title={r.desc}
-                    >
-                      <span className="role-icon">{r.icon}</span>
-                      <span className="role-name">{r.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="role-desc">
-                  {ROLES.find((r) => r.id === role)?.desc}
-                </div>
-              </div>
-
             </>
           )}
 
-          {mode !== "solo" && (
-            <label className="field">
-              <span>あいことば（パスワード）</span>
-              <input
-                value={pw}
-                maxLength={12}
-                placeholder="例: きょうのぼうけん"
-                onChange={(e) => setPw(e.target.value)}
-              />
-            </label>
-          )}
+          <label className="field">
+            <span>あいことば（パスワード）</span>
+            <input
+              value={pw}
+              maxLength={12}
+              placeholder="例: きょうのぼうけん"
+              onChange={(e) => setPw(e.target.value)}
+            />
+          </label>
 
           {p.error && <div className="error-box">{p.error}</div>}
 
@@ -190,14 +169,12 @@ export function Title(p: Props) {
               disabled={busy}
               onClick={() =>
                 go(() => {
-                  if (mode === "solo") p.onSolo(profile(), diff, gameMode);
-                  else if (mode === "create") p.onCreate(pw, profile(), diff, gameMode);
+                  if (mode === "create") p.onCreate(pw, profile(), diff, gameMode);
                   else if (mode === "join") p.onJoin(pw, profile());
                   else p.onSpectate(pw);
                 })
               }
             >
-              {mode === "solo" && (gameMode === "survival" ? "☠️ 挑む！" : "特訓スタート！")}
               {mode === "create" && "へやをつくる！"}
               {mode === "join" && "参加する！"}
               {mode === "spectate" && "観戦する"}

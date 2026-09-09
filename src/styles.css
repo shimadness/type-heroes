@@ -160,11 +160,6 @@ body {
 .title-logo {
   margin-bottom: 8px;
 }
-.title-sub {
-  color: var(--sub);
-  letter-spacing: 4px;
-  font-size: 14px;
-}
 .title-main {
   font-family: "Press Start 2P", "DotGothic16", monospace;
   font-size: clamp(32px, 8vw, 64px);

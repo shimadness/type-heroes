@@ -50,7 +50,6 @@ export function Title(p: Props) {
   return (
     <div className="screen title-screen center">
       <div className="title-logo">
-        <div className="title-sub">みんなでタイピングクエスト</div>
         <h1 className="title-main">
           TYPE <span className="title-accent">HEROES</span>
         </h1>

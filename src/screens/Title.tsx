@@ -12,6 +12,7 @@ interface Props {
   onSpectate: (pw: string) => void;
   onRanking: () => void;
   onTutorial: () => void;
+  onLegal: () => void;
 }
 
 // 画面内のセットアップ段階（warlord = うぉーろーどのサブメニュー）。
@@ -181,6 +182,12 @@ export function Title(p: Props) {
           </div>
         </div>
       )}
+
+      <div className="title-footer">
+        <button className="link-btn" onClick={p.onLegal}>
+          利用規約・プライバシーポリシー
+        </button>
+      </div>
     </div>
   );
 }

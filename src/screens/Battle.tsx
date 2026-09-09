@@ -14,11 +14,13 @@ import type {
   TelegraphEvent,
 } from "../game/types";
 import {
+  BERSERK,
   DIFF_TUNING,
   ENEMY_KINDS,
   STAGES,
   TUNING,
   equipDef,
+  furyMult,
   roleDef,
 } from "../game/data";
 import { HostBrain } from "../game/host";
@@ -91,7 +93,10 @@ export function Battle({ session, state, onLeave }: Props) {
 
   const [, setTick] = useState(0);
   const forceUpdate = useCallback(() => setTick((t) => t + 1), []);
-  const [mode, setMode] = useState<"attack" | "heal">("attack");
+  const [modeState, setMode] = useState<"attack" | "heal">("attack");
+  // かいふくの無いロール（ばーさーかー）は常にこうげき
+  const myRole = roleDef(me?.role ?? "attacker");
+  const mode: "attack" | "heal" = myRole.noHeal ? "attack" : modeState;
   const [targetKey, setTargetKey] = useState("0");
   const [activeCardId, setActiveCardId] = useState<string>("");
   const [shake, setShake] = useState(false);
@@ -118,6 +123,23 @@ export function Battle({ session, state, onLeave }: Props) {
   const teleLocalRef = useRef<Record<string, number>>({});
   const enemyHitAt = useRef<Record<string, number>>({});
   const comboRef = useRef(0);
+  // ばーさーかーのいかりスタック。計算はこのローカル値、RTDB は仲間に見せるためのミラー
+  const furyRef = useRef(0);
+  const [fury, setFuryState] = useState(0);
+  const setFury = useCallback(
+    (n: number) => {
+      if (n === furyRef.current) return;
+      furyRef.current = n;
+      setFuryState(n);
+      fireAndForget("いかり同期", room.setFury(n));
+    },
+    [room]
+  );
+  // ステージをまたいだら 0 から（コンボと同じ）。前ステージの値が RTDB に残らないよう明示的に書く
+  useEffect(() => {
+    if (!isSpectator && myRole.fury) fireAndForget("いかり初期化", room.setFury(0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const activeCardRef = useRef<Card | null>(null);
   const cardsRef = useRef<Card[]>([]);
 
@@ -326,7 +348,7 @@ export function Battle({ session, state, onLeave }: Props) {
               ? TUNING.bossWeaknessMult
               : TUNING.weaknessMult
             : 1;
-          const mult = Room.damageMult(myself, s, chainCount, wMult, crit);
+          const mult = Room.damageMult(myself, s, chainCount, wMult, crit, furyRef.current);
           const dmg = Math.round(kanaLen * TUNING.wordBonusPerKana * mult + pendingDmg.current);
           pendingDmg.current = 0;
           statsDelta.current.damage += dmg;
@@ -347,6 +369,16 @@ export function Battle({ session, state, onLeave }: Props) {
           if (killed) sfx.kill();
           else if (crit) sfx.crit();
           else sfx.wordDone();
+          // ばーさーかー: ノーミスで打ち切るたびにいかりが1段上がる（次のワードから効く）
+          if (crit && roleDef(myself.role).fury && furyRef.current < BERSERK.maxStacks) {
+            const next = furyRef.current + 1;
+            setFury(next);
+            addFloat(
+              `🔥いかり ×${furyMult(next)}${next >= BERSERK.maxStacks ? " MAX!" : ""}`,
+              "float-fury",
+              "self"
+            );
+          }
         }
       } else {
         // 回復: いちばんHPが減っている仲間（自分含む）へ
@@ -373,7 +405,7 @@ export function Battle({ session, state, onLeave }: Props) {
       if (roleDef(myself.role).buffOnWord) fireAndForget("応援バフ", room.applyBuff());
       forceUpdate();
     },
-    [room, mode, targetKey, addFloat]
+    [room, mode, targetKey, addFloat, setFury]
   );
 
   // ---------- ワード完了処理 ----------
@@ -454,7 +486,7 @@ export function Battle({ session, state, onLeave }: Props) {
         localSessionStats.current.typed++;
         if (!unisonTyping && activeCard?.kind === "genre") {
           if (mode === "attack") {
-            const m = Room.damageMult(myself, s, 1, 1, false);
+            const m = Room.damageMult(myself, s, 1, 1, false, furyRef.current);
             pendingDmg.current += TUNING.keyDamage * m;
             enemyHitAt.current[targetKey] = Date.now();
           } else {
@@ -477,6 +509,11 @@ export function Battle({ session, state, onLeave }: Props) {
         localSessionStats.current.miss++;
         setMissFlash(true);
         setTimeout(() => setMissFlash(false), 180);
+        // ばーさーかーはミスでいかりが消える
+        if (roleDef(myself.role).fury && furyRef.current > 0) {
+          setFury(0);
+          addFloat("💨いかりが さめた…", "float-hurt", "self");
+        }
         // 上位ティアはミスが自傷になる（ロール・装備は効かないフラット値）
         const selfDmg = DIFF_TUNING[s.meta.diff].missSelfDamage;
         if (selfDmg > 0) {
@@ -486,7 +523,7 @@ export function Battle({ session, state, onLeave }: Props) {
       }
       forceUpdate();
     },
-    [room, activeCard, mode, targetKey, unisonTyping, completeWord, forceUpdate, addFloat]
+    [room, activeCard, mode, targetKey, unisonTyping, completeWord, forceUpdate, addFloat, setFury]
   );
 
   // ---------- キー入力（物理キーボード） ----------
@@ -506,7 +543,7 @@ export function Battle({ session, state, onLeave }: Props) {
       }
       if (e.key === " ") {
         e.preventDefault();
-        setMode((m) => (m === "attack" ? "heal" : "attack"));
+        if (!roleDef(myself.role).noHeal) setMode((m) => (m === "attack" ? "heal" : "attack"));
         return;
       }
       // 数字キーでターゲット変更（敵カードの番号バッジと対応。ワードに数字は出ない）
@@ -830,6 +867,11 @@ export function Battle({ session, state, onLeave }: Props) {
                 <span className="player-role">{rd.icon}</span>
                 <span className="player-name">{pl.name}</span>
                 {eq && <span className="player-equip" title={eq.desc}>{eq.icon}</span>}
+                {rd.fury && (pid === room.myId ? fury : pl.fury ?? 0) > 0 && (
+                  <span className="player-fury" title="いかり（ノーミス連続）">
+                    🔥×{furyMult(pid === room.myId ? fury : pl.fury ?? 0)}
+                  </span>
+                )}
                 {unison?.active && unison.done?.[pid] && <span title="ユニゾン入力完了">✅</span>}
               </div>
               <div className="bar player-hp-bar">
@@ -886,13 +928,29 @@ export function Battle({ session, state, onLeave }: Props) {
                 >
                   ⚔️ こうげき
                 </button>
-                <button
-                  className={`mode-btn heal ${mode === "heal" ? "sel" : ""}`}
-                  onClick={() => setMode("heal")}
-                >
-                  💚 かいふく
-                </button>
-                <span className="mode-hint">Space: 切替 ／ Tab: つぎのワード ／ 1〜9: ねらう敵</span>
+                {myRole.noHeal ? (
+                  <div
+                    className={`fury-meter ${fury >= BERSERK.maxStacks ? "max" : ""}`}
+                    title={`ノーミスで打ち切るごとに +${Math.round(BERSERK.perStack * 100)}%。ミスで 0 に戻る`}
+                  >
+                    {Array.from({ length: BERSERK.maxStacks }, (_, i) => (
+                      <span key={i} className={`fury-pip ${i < fury ? "on" : ""}`}>
+                        🔥
+                      </span>
+                    ))}
+                    <span className="fury-mult">×{furyMult(fury)}</span>
+                  </div>
+                ) : (
+                  <button
+                    className={`mode-btn heal ${mode === "heal" ? "sel" : ""}`}
+                    onClick={() => setMode("heal")}
+                  >
+                    💚 かいふく
+                  </button>
+                )}
+                <span className="mode-hint">
+                  {myRole.noHeal ? "" : "Space: 切替 ／ "}Tab: つぎのワード ／ 1〜9: ねらう敵
+                </span>
               </div>
               <WordReel
                 activeId={activeCard?.id ?? ""}

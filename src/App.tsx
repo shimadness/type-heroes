@@ -13,6 +13,7 @@ import { StageClear } from "./screens/StageClear";
 import { Result } from "./screens/Result";
 import { Ranking } from "./screens/Ranking";
 import { Tutorial } from "./screens/Tutorial";
+import { Legal } from "./screens/Legal";
 
 export interface Session {
   store: Store;
@@ -32,6 +33,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [showRanking, setShowRanking] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showLegal, setShowLegal] = useState(false);
   const [error, setError] = useState("");
   const state = useRoom(session?.room ?? null);
 
@@ -109,6 +111,10 @@ export default function App() {
     return <Ranking onBack={() => setShowRanking(false)} />;
   }
 
+  if (showLegal) {
+    return <Legal onBack={() => setShowLegal(false)} />;
+  }
+
   if (!session) {
     return (
       <Title
@@ -119,6 +125,7 @@ export default function App() {
         onSpectate={spectateRoom}
         onRanking={() => setShowRanking(true)}
         onTutorial={() => setShowTutorial(true)}
+        onLegal={() => setShowLegal(true)}
       />
     );
   }

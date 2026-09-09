@@ -12,7 +12,7 @@ import type {
   RoomMeta,
 } from "./types";
 import type { Difficulty, GenreId } from "../typing/words";
-import { PLAYER_MAX_HP, TUNING, roleDef } from "./data";
+import { PLAYER_MAX_HP, TUNING, furyMult, roleDef } from "./data";
 import type { TeamDifficulty } from "./data";
 import type { EquipId, GameMode, RoleId } from "./types";
 
@@ -245,6 +245,11 @@ export class Room {
     return this.store.update(this.myPath, { equip });
   }
 
+  /** ばーさーかーのいかりスタックを仲間に見せる（計算はローカル値で行う） */
+  setFury(fury: number) {
+    return this.store.update(this.myPath, { fury });
+  }
+
   // ---------- battle: 攻撃・回復 ----------
 
   /** 打鍵ダメージのフラッシュ（まとめて適用）。敵が倒れたら true */
@@ -383,16 +388,21 @@ export class Room {
 
   // ---------- helpers ----------
 
-  /** 与ダメージ倍率（ロール・装備・バフ・チェイン込み）。weaknessMult は 1（不一致）〜 boss弱点倍率 */
+  /**
+   * 与ダメージ倍率（ロール・装備・バフ・チェイン込み）。weaknessMult は 1（不一致）〜 boss弱点倍率。
+   * fury はばーさーかーのいかりスタック（他ロールでは無視）
+   */
   static damageMult(
     me: PlayerState,
     state: RoomState | null,
     chainCount: number,
     weaknessMult: number,
-    crit: boolean
+    crit: boolean,
+    fury = 0
   ): number {
     const r = roleDef(me.role);
     let m = r.dmgMult;
+    if (r.fury) m *= furyMult(fury);
     if (me.equip === "sword") m *= 1.15;
     const buff = state?.buff;
     if (buff && buff.until > Date.now()) m *= buff.mult;

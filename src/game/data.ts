@@ -14,7 +14,25 @@ export interface RoleDef {
   takenMult: number; // 被ダメージ倍率
   aggro: number; // 敵に狙われやすさ（重み）
   buffOnWord: boolean; // ワード完了で味方全体バフ
+  noHeal?: boolean; // かいふくモードが無い（こうげきのみ）
+  fury?: boolean; // ノーミス完了ごとに火力が上がる（BERSERK 参照）。ミスで 0 に戻る
 }
+
+// ============================================================
+// ばーさーかーの「いかり」
+//   ノーミスでワードを打ち切るごとに 1 スタック。与ダメージ倍率 = 1 + スタック × perStack。
+//   ミスタイプした瞬間に 0 に戻る。かいふくはできない。
+//   上限 ×2.0 = アタッカー(×1.25)の 1.6 倍。ノーミス5語を維持できる人だけが到達できる
+// ============================================================
+export const BERSERK = {
+  perStack: 0.2, // 1スタックごとの火力加算
+  maxStacks: 5, // 上限スタック（= ×2.0）
+};
+/** いかりスタック → 与ダメージ倍率 */
+export const furyMult = (stacks: number): number =>
+  1 + Math.min(BERSERK.maxStacks, Math.max(0, stacks)) * BERSERK.perStack;
+/** いかり最大時の倍率（説明文・チュートリアル用） */
+export const FURY_MAX_MULT = furyMult(BERSERK.maxStacks);
 
 export const ROLES: RoleDef[] = [
   {
@@ -36,6 +54,12 @@ export const ROLES: RoleDef[] = [
     id: "buffer", label: "バッファー", icon: "🎺",
     desc: "ワード完了で8秒間チーム火力+20%（全員に効果）。",
     dmgMult: 0.95, healMult: 1.0, takenMult: 1.0, aggro: 1, buffOnWord: true,
+  },
+  {
+    id: "berserker", label: "ばーさーかー", icon: "🪓",
+    desc: `ノーミスで打ち切るごとに火力+${Math.round(BERSERK.perStack * 100)}%（最大×${FURY_MAX_MULT}）。ミスで元どおり。かいふくはできない。`,
+    dmgMult: 1.0, healMult: 0, takenMult: 1.0, aggro: 1, buffOnWord: false,
+    noHeal: true, fury: true,
   },
 ];
 
@@ -68,6 +92,7 @@ export const ROLE_EQUIP: Record<RoleId, EquipId> = {
   healer: "staff",
   tank: "shield",
   buffer: "boots",
+  berserker: "sword",
 };
 
 export interface EquipRecommendation {

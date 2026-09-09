@@ -1,7 +1,7 @@
 import type { Difficulty, GenreId } from "../typing/words";
 import type { TeamDifficulty } from "./data";
 
-export type RoleId = "attacker" | "healer" | "tank" | "buffer";
+export type RoleId = "attacker" | "healer" | "tank" | "buffer" | "berserker";
 export type EquipId =
   | "none"
   | "sword" // 連打の剣: ダメージ+15%
@@ -31,6 +31,7 @@ export interface PlayerState {
   lastSeen: number;
   equip: EquipId;
   spectator?: boolean;
+  fury?: number; // ばーさーかーのいかりスタック（仲間の表示用。本人はローカル値で計算する）
   stats: PlayerStats;
 }
 

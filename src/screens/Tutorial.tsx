@@ -11,7 +11,16 @@
 //   ステップの流れ自体を変える改修をしたら STEPS の並びも見直す。
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DIFF_TUNING, ENEMY_KINDS, SURVIVAL, TEAM_DIFFS, TUNING, roleDef } from "../game/data";
+import {
+  BERSERK,
+  DIFF_TUNING,
+  ENEMY_KINDS,
+  FURY_MAX_MULT,
+  SURVIVAL,
+  TEAM_DIFFS,
+  TUNING,
+  roleDef,
+} from "../game/data";
 import { TypingWord } from "../typing/romaji";
 import { GENRES, type GenreId } from "../typing/words";
 import { alienFor, enAsset } from "../assets";
@@ -429,6 +438,14 @@ export function Tutorial({ onExit }: Props) {
           <div className="tut-sum-row">
             <span>{roleDef("healer").icon}</span>
             <span>ヒーラーが1人いると安定。ロールとなまえは部屋（じゅんびのやかた）で決める</span>
+          </div>
+          <div className="tut-sum-row">
+            <span>{roleDef("berserker").icon}</span>
+            <span>
+              {roleDef("berserker").label}は <b>ノーミスで打ち切るごとに火力+
+              {Math.round(BERSERK.perStack * 100)}%</b>（最大×{FURY_MAX_MULT}）。
+              ミスすると元にもどり、かいふくはできない。自信のある人向け
+            </span>
           </div>
           <div className="tut-sum-row">
             <span>🏕️</span>

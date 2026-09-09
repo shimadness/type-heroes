@@ -1338,3 +1338,260 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ============================================================
+   ワードのリール（1枚だけ見せて Tab で回す）
+   ============================================================ */
+.reel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.reel-row {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+.reel-window {
+  flex: 1;
+  max-width: 560px;
+  overflow: hidden; /* リールが上から降りてくる演出のはみ出しを切る */
+  border-radius: 14px;
+}
+.word-card.reel-card {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  padding: 12px 18px;
+  border-color: #67e8f9;
+  background: #1c1740;
+  box-shadow: 0 0 14px rgba(103, 232, 249, 0.35);
+  animation: reel-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+.word-card.reel-card.weak-match {
+  border-color: var(--gold);
+  box-shadow: 0 0 16px rgba(255, 213, 74, 0.55);
+}
+.word-card.reel-card.defense {
+  border-color: #ef4444;
+  animation: reel-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.15), pulse-red 0.7s 0.22s infinite;
+}
+.word-card.reel-card.revive {
+  border-color: var(--hp);
+}
+.reel-card .card-jp {
+  font-size: 24px;
+}
+.reel-card .card-romaji {
+  font-size: 15px;
+}
+@keyframes reel-in {
+  0% { transform: translateY(-70%) scaleY(0.6); opacity: 0; filter: blur(2px); }
+  60% { transform: translateY(6%) scaleY(1.05); opacity: 1; filter: blur(0); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+.reel-next {
+  font-family: inherit;
+  color: var(--sub);
+  background: #171230;
+  border: 2px solid var(--panel-border);
+  border-radius: 12px;
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.08s;
+}
+.reel-next:hover {
+  background: #241d45;
+  color: var(--text);
+}
+.reel-next:active {
+  transform: translateY(2px);
+}
+.reel-next-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.reel-next-label {
+  font-size: 11px;
+}
+.reel-next.want {
+  animation: pulse 0.9s infinite;
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.reel-strip {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.reel-chip {
+  font-family: inherit;
+  font-size: 15px;
+  width: 36px;
+  height: 30px;
+  border-radius: 8px;
+  border: 2px solid var(--panel-border);
+  background: #171230;
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0.65;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.reel-chip.cur {
+  opacity: 1;
+  border-color: #67e8f9;
+  transform: translateY(-2px);
+  box-shadow: 0 0 8px rgba(103, 232, 249, 0.5);
+}
+.reel-chip.weak {
+  border-color: var(--gold);
+  opacity: 0.95;
+}
+.reel-chip.weak::after {
+  content: "⚡";
+  font-size: 10px;
+  margin-left: 1px;
+}
+.reel-chip.defense {
+  border-color: #ef4444;
+  animation: pulse-red 0.7s infinite;
+  opacity: 1;
+}
+.reel-chip.revive {
+  border-color: var(--hp);
+  opacity: 1;
+}
+.reel-chip.want {
+  animation: pulse 0.9s infinite;
+  border-color: var(--gold);
+  opacity: 1;
+}
+
+/* 敵の番号（数字キーでねらう） */
+.enemy-num {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 4px 5px;
+}
+.enemy-card.targeted .enemy-num {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* バトル中の あきらめる */
+.giveup-btn {
+  font-size: 12px;
+  padding: 5px 10px;
+  opacity: 0.7;
+}
+.giveup-btn:hover {
+  opacity: 1;
+}
+
+/* ステージクリア: そうびえらび */
+.equip-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.equip-card {
+  position: relative;
+  font-family: inherit;
+  color: var(--text);
+  background: #171230;
+  border: 2px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 14px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.08s, border-color 0.15s;
+}
+.equip-card:hover {
+  transform: translateY(-2px);
+}
+.equip-card.sel {
+  border-color: var(--gold);
+  background: #2c2258;
+  box-shadow: 0 0 14px rgba(255, 213, 74, 0.5);
+}
+.equip-card.sel::before {
+  content: "✔";
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  color: var(--gold);
+  font-size: 14px;
+}
+.equip-rec {
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  font-size: 10px;
+  color: #1a1533;
+  background: var(--gold);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.equip-icon {
+  font-size: 28px;
+}
+.equip-name {
+  font-size: 15px;
+}
+.equip-desc {
+  font-size: 11px;
+  color: #9fdcff;
+}
+.drop-list {
+  border-top: 1px solid var(--panel-border);
+  padding-top: 6px;
+}
+.drop-row.me span:first-child {
+  color: #67e8f9;
+}
+
+@media (max-width: 640px) {
+  .reel-card .card-jp {
+    font-size: 19px;
+  }
+  .reel-card .card-romaji {
+    font-size: 12px;
+  }
+  .reel-next {
+    width: 52px;
+  }
+  .equip-grid {
+    gap: 6px;
+  }
+  .equip-card {
+    padding: 12px 6px 8px;
+  }
+  .giveup-btn {
+    padding: 4px 8px;
+  }
+}

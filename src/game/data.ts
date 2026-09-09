@@ -1,5 +1,5 @@
 import { DIFF_LABEL, type Difficulty, type GenreId } from "../typing/words";
-import type { EquipId, RoleId } from "./types";
+import type { EquipId, PlayerState, RoleId } from "./types";
 
 // ============================================================
 // ロール（職業）
@@ -61,6 +61,52 @@ export const EQUIPS: EquipDef[] = [
 
 export const equipDef = (id: EquipId): EquipDef | undefined =>
   EQUIPS.find((e) => e.id === id);
+
+/** ロールに素直に合う装備（実績がまだ無いときのフォールバック） */
+export const ROLE_EQUIP: Record<RoleId, EquipId> = {
+  attacker: "sword",
+  healer: "staff",
+  tank: "shield",
+  buffer: "boots",
+};
+
+export interface EquipRecommendation {
+  equip: EquipId;
+  reason: string; // 「こうげきが得意」など。選択画面のおすすめバッジに出す
+}
+
+/**
+ * 実績（スタッツ）から「その人が得意な行動」を導いて装備をおすすめする。
+ * チーム内でのシェアが最も大きい行動 → それを伸ばす装備。
+ *   ダメージ→剣 / 回復→杖 / 防御成功→盾 / ワード数→ブーツ
+ * 実績が無い（全部0）ときや同率のときはロール向きの装備に倒す。
+ */
+export function recommendEquip(
+  me: PlayerState,
+  team: PlayerState[]
+): EquipRecommendation {
+  type Pick = (s: PlayerState["stats"] | undefined) => number;
+  const share = (f: Pick): number => {
+    const total = team.reduce((a, p) => a + (f(p.stats) || 0), 0);
+    return total > 0 ? (f(me.stats) || 0) / total : 0;
+  };
+  const cands: { equip: EquipId; reason: string; score: number }[] = [
+    { equip: "sword", reason: "こうげきが得意", score: share((s) => s?.damage ?? 0) },
+    { equip: "staff", reason: "かいふくが得意", score: share((s) => s?.heal ?? 0) },
+    { equip: "shield", reason: "ぼうぎょが得意", score: share((s) => s?.defended ?? 0) },
+    { equip: "boots", reason: "ワード数が多い", score: share((s) => s?.words ?? 0) },
+  ];
+  const pref = ROLE_EQUIP[me.role] ?? "sword";
+  cands.sort(
+    (a, b) => b.score - a.score || (a.equip === pref ? -1 : b.equip === pref ? 1 : 0)
+  );
+  const best = cands[0];
+  if (best.score <= 0) {
+    const p = cands.find((c) => c.equip === pref) ?? best;
+    return { equip: p.equip, reason: "ロールに合う" };
+  }
+  return { equip: best.equip, reason: best.reason };
+}
 
 // ============================================================
 // 敵（Engineer Navigator のダンジョンモンスターを流用）
@@ -302,6 +348,7 @@ export const TUNING = {
   chainBonusMax: 0.5,
   gaugePerWord: 9, // ワード完了ごとのユニゾンゲージ
   unisonDmgPerPlayer: 120, // ユニゾン成功時 全員×これ を全敵に
+  unisonHealRatio: 0.35, // ユニゾン成功時に生存者全員が回復（maxHp比）。失敗リスクの見返り
   unisonTime: 12000,
   reviveHpRatio: 0.4,
   rageAtkMult: 2.2, // 怒り爆発時の全体攻撃倍率

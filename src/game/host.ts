@@ -9,14 +9,14 @@ import type { EnemyState, PlayerState, RoomState } from "./types";
 import {
   DIFF_TUNING,
   ENEMY_KINDS,
-  EQUIPS,
   STAGES,
   SURVIVAL,
   TUNING,
+  recommendEquip,
 } from "./data";
 import { GENRES, type GenreId } from "../typing/words";
 import { Room, ROOT, aliveEnemies, allPlayers, alivePlayers, isSurvival } from "./room";
-import { roleDef } from "./data";
+import { PLAYER_MAX_HP, roleDef } from "./data";
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -207,21 +207,7 @@ export class HostBrain {
     if (alive.length === 0 && allPlayers(state).length > 0) {
       if (!this.transitioning) {
         this.transitioning = true;
-        if (isSurvival(state)) {
-          // 倒しかけのウェーブの分も撃破数に含める
-          const kills =
-            (state.meta.kills ?? 0) +
-            Object.values(state.enemies ?? {}).filter((e) => !e.alive).length;
-          // ランキング書き込みが失敗（ルール未適用など）しても進行が止まらないよう、status を先に確定する
-          await this.store.update(`${this.base}/meta`, {
-            status: "gameover",
-            clearedAt: now,
-            kills,
-          });
-          await this.writeSurvivalRanking(state, kills, now);
-        } else {
-          await this.store.update(`${this.base}/meta`, { status: "gameover" });
-        }
+        await this.endGame(state, now);
       }
       return;
     }
@@ -297,6 +283,41 @@ export class HostBrain {
     }
   }
 
+  /** ゲームオーバーへ（全滅／あきらめる で共用）。サバイバルは撃破数を確定してランキング登録 */
+  private async endGame(state: RoomState, now: number) {
+    if (isSurvival(state)) {
+      // 倒しかけのウェーブの分も撃破数に含める
+      const kills =
+        (state.meta.kills ?? 0) +
+        Object.values(state.enemies ?? {}).filter((e) => !e.alive).length;
+      // ランキング書き込みが失敗（ルール未適用など）しても進行が止まらないよう、status を先に確定する
+      await this.store.update(`${this.base}/meta`, {
+        status: "gameover",
+        clearedAt: now,
+        kills,
+      });
+      await this.writeSurvivalRanking(state, kills, now);
+    } else {
+      await this.store.update(`${this.base}/meta`, { status: "gameover" });
+    }
+  }
+
+  /** バトル中の「あきらめる」（ホスト操作）。全滅と同じ扱いで終了する */
+  async giveUp(state: RoomState) {
+    if (state.meta.status !== "battle" || this.transitioning) return;
+    this.transitioning = true;
+    await this.endGame(state, Date.now());
+  }
+
+  /** 生き残っている攻撃予告を消すための update パッチ（敵が入れ替わったら予告は無効） */
+  private telegraphClears(state: RoomState): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [id, ev] of Object.entries(state.events ?? {})) {
+      if (ev.type === "telegraph") out[`events/${id}`] = null;
+    }
+    return out;
+  }
+
   private async enemyAttack(
     state: RoomState,
     enemyKey: string,
@@ -352,13 +373,21 @@ export class HostBrain {
         for (const [key] of aliveEnemies(state)) {
           await this.room.damageEnemy(Number(key), dmg);
         }
-        await this.store.update(`${this.base}/unison`, {
-          active: false,
-          result: "success",
-        });
+        // 成功のごほうび: 生存者全員が回復（ユニゾン中は攻撃をもらいっぱなしなので、その埋め合わせ）
+        const updates: Record<string, unknown> = {
+          "unison/active": false,
+          "unison/result": "success",
+        };
+        for (const [pid, p] of alive) {
+          updates[`players/${pid}/hp`] = Math.min(
+            p.maxHp,
+            Math.round(p.hp + p.maxHp * TUNING.unisonHealRatio)
+          );
+        }
+        await this.store.update(this.base, updates);
         await this.room.pushEvent({
           type: "info",
-          text: `✨ユニゾンアタック成功！！ 全体に${dmg}ダメージ！`,
+          text: `✨ユニゾンアタック成功！！ 全体に${dmg}ダメージ！ みんなのHPが回復した！`,
           at: now,
         } as never);
       } else {
@@ -390,9 +419,10 @@ export class HostBrain {
     const playerCount = allPlayers(state).length;
 
     if (wave + 1 < stage.waves.length) {
-      // 次ウェーブ
+      // 次ウェーブ（前ウェーブの敵が残した攻撃予告は同時に消す。残すと新しい敵の番号に化けて当たる）
       const enemies = this.buildWave(state, stageIdx, wave + 1, playerCount);
       await this.store.update(this.base, {
+        ...this.telegraphClears(state),
         enemies,
         "meta/wave": wave + 1,
         "meta/rage": 0,
@@ -400,9 +430,12 @@ export class HostBrain {
       await this.pushEncounter(enemies);
       this.resetSchedules();
     } else if (stageIdx + 1 < STAGES.length) {
-      // ステージクリア → 装備ドロップ
+      // ステージクリア → 装備えらび（おすすめを初期値として入れておき、画面で選び直せる）
       await this.dropEquips(state);
-      await this.store.update(`${this.base}/meta`, { status: "stageclear" });
+      await this.store.update(this.base, {
+        ...this.telegraphClears(state),
+        "meta/status": "stageclear",
+      });
     } else {
       // 全ステージクリア！
       const clearedAt = Date.now();
@@ -426,6 +459,7 @@ export class HostBrain {
 
     const enemies = this.buildSurvivalWave(state, next, playerCount);
     const updates: Record<string, unknown> = {
+      ...this.telegraphClears(state),
       enemies,
       "meta/wave": next,
       "meta/kills": kills,
@@ -448,31 +482,29 @@ export class HostBrain {
   /** 休憩: 気絶者は復活・生存者は回復（ステージクリア後／サバイバルのボス撃破後で共用） */
   private restUpdates(state: RoomState, updates: Record<string, unknown>) {
     for (const [pid, p] of allPlayers(state)) {
+      // maxHp が欠けた不完全なノードが混ざっても NaN を書かない（NaN は RTDB が update ごと拒否する）
+      const maxHp = p.maxHp || PLAYER_MAX_HP;
       const hp = p.alive
-        ? Math.min(p.maxHp, Math.round(p.hp + p.maxHp * TUNING.stageHealRatio))
-        : Math.round(p.maxHp * TUNING.reviveHpRatio);
+        ? Math.min(maxHp, Math.round((p.hp || 0) + maxHp * TUNING.stageHealRatio))
+        : Math.round(maxHp * TUNING.reviveHpRatio);
       updates[`players/${pid}/hp`] = hp;
       updates[`players/${pid}/alive`] = true;
     }
   }
 
+  /**
+   * 装備ドロップ。実績（得意な行動）から導いたおすすめを全員に配る。
+   * ストーリーではこれが選択画面の初期値になり、放置しても不利にならない。
+   * サバイバルにはえらぶ画面が無いので、おすすめがそのまま装備になる。
+   */
   private async dropEquips(state: RoomState) {
-    for (const [pid, p] of allPlayers(state)) {
-      // ロールに合いやすい装備が出やすい抽選
-      const weights: Record<string, number> = {
-        sword: p.role === "attacker" ? 3 : 1,
-        staff: p.role === "healer" ? 3 : 1,
-        shield: p.role === "tank" ? 3 : 1,
-        boots: p.role === "buffer" ? 3 : 1,
-      };
-      const pool: string[] = [];
-      for (const eq of EQUIPS) {
-        for (let i = 0; i < (weights[eq.id] ?? 1); i++) pool.push(eq.id);
-      }
-      await this.store.update(`${this.base}/players/${pid}`, {
-        equip: pick(pool),
-      });
+    const players = allPlayers(state);
+    const team = players.map(([, p]) => p);
+    const updates: Record<string, unknown> = {};
+    for (const [pid, p] of players) {
+      updates[`players/${pid}/equip`] = recommendEquip(p, team).equip;
     }
+    if (Object.keys(updates).length > 0) await this.store.update(this.base, updates);
   }
 
   /** ステージクリア画面から次ステージへ（ホスト操作） */

@@ -17,6 +17,7 @@ import { GENRES, type GenreId } from "../typing/words";
 import { alienFor, enAsset } from "../assets";
 import { sfx } from "../sfx";
 import { TouchKeyboard, isTouchDevice } from "../ui/TouchKeyboard";
+import { WordReel, nextReelId, type ReelItem } from "../ui/WordReel";
 
 const TOUCH = isTouchDevice();
 
@@ -218,8 +219,12 @@ export function Tutorial({ onExit }: Props) {
         enemyHpRef.current = Math.max(0, enemyHpRef.current - dmg);
         hitRef.current = Date.now();
         gaugeRef.current = 0;
+        // 本編と同じく、成功したら生存者全員が回復する
+        const heal = Math.round(MAX_HP * TUNING.unisonHealRatio);
+        myHpRef.current = Math.min(MAX_HP, myHpRef.current + heal);
+        allyHpRef.current = Math.min(MAX_HP, allyHpRef.current + heal);
         sfx.unison();
-        float(`✨ユニゾン ${dmg}!`, "float-crit");
+        float(`✨ユニゾン ${dmg}! みんな+${heal}`, "float-crit");
         advance(1600);
         return;
       }
@@ -311,8 +316,7 @@ export function Tutorial({ onExit }: Props) {
         e.preventDefault();
         const cards = cardsRef.current;
         if (cards.length > 1) {
-          const i = cards.findIndex((c) => c.id === activeIdRef.current);
-          activeIdRef.current = cards[(i + 1) % cards.length].id;
+          activeIdRef.current = nextReelId(cards, activeIdRef.current, e.shiftKey ? -1 : 1);
           rerender();
         }
         return;
@@ -361,9 +365,9 @@ export function Tutorial({ onExit }: Props) {
     },
     weakness: {
       main: TOUCH
-        ? "⚡弱点 のカードをタップしてから打とう"
-        : "Tab で ⚡弱点 のカードにきりかえて打とう",
-      sub: `弱点ジャンルは ×${TUNING.weaknessMult}（ボスは ×${TUNING.bossWeaknessMult}）`,
+        ? "「つぎ」で リールを回して ⚡弱点 のワードにしてから打とう"
+        : "Tab で リールを回して ⚡弱点 のワードにしてから打とう",
+      sub: `弱点ジャンルは ×${TUNING.weaknessMult}（ボスは ×${TUNING.bossWeaknessMult}）。下のチップが乗っているワード`,
     },
     defense: {
       main: "⚠️こうげきが来る！ 赤いカードを打ち切れ",
@@ -381,7 +385,9 @@ export function Tutorial({ onExit }: Props) {
     },
     unison: {
       main: "ゲージ満タン！ ✨ユニゾン を押して全員で打ち切れ",
-      sub: "チームの必殺技。仲間との合わせ技で大ダメージ",
+      sub: `チームの必殺技。全員そろえば大ダメージ＋みんなのHPが${Math.round(
+        TUNING.unisonHealRatio * 100
+      )}%回復`,
     },
     done: { main: "", sub: "" },
   };
@@ -405,6 +411,19 @@ export function Tutorial({ onExit }: Props) {
             <span>
               仲間の完了から{Math.round(TUNING.chainWindow / 1000)}秒以内に完了すると
               チェイン（最大+{Math.round(TUNING.chainBonusMax * 100)}%）
+            </span>
+          </div>
+          <div className="tut-sum-row">
+            <span>🔢</span>
+            <span>
+              敵が複数いるときは <b>1〜9 キー</b>（またはタップ）でねらう敵を変えられる
+            </span>
+          </div>
+          <div className="tut-sum-row">
+            <span>🎁</span>
+            <span>
+              ステージクリアで <b>そうびを1つえらぶ</b>。実績から見た「得意な行動」に合う
+              おすすめが最初から選ばれているので、迷ったらそのままでOK
             </span>
           </div>
           <div className="tut-sum-row">
@@ -587,11 +606,16 @@ export function Tutorial({ onExit }: Props) {
           )}
         </div>
 
-        <div className="card-row">
-          {cardsRef.current.map((c) => {
-            const isActive = c.id === activeIdRef.current;
+        {/* 本編と同じリールUI（1枚だけ見せて Tab／つぎ で回す） */}
+        <WordReel
+          activeId={activeIdRef.current}
+          onSelect={(id) => {
+            activeIdRef.current = id;
+            rerender();
+          }}
+          items={cardsRef.current.map((c): ReelItem => {
             const weakHit = c.kind === "genre" && c.genre === weakGenre && step === "weakness";
-            const [typed, rest] = c.word.romajiParts();
+            const g = c.genre ? genreOf(c.genre) : null;
             const label =
               c.kind === "defense"
                 ? "🛡️ぼうぎょ!"
@@ -599,43 +623,29 @@ export function Tutorial({ onExit }: Props) {
                   ? "⛑️そせい: なかま"
                   : c.kind === "unison"
                     ? "✨ユニゾンアタック"
-                    : `${genreOf(c.genre!).icon}${genreOf(c.genre!).label}${
-                        weakHit ? ` ⚡弱点×${TUNING.weaknessMult}` : ""
-                      }`;
-            return (
-              <button
-                key={c.id}
-                className={[
-                  "word-card",
-                  c.kind,
-                  isActive ? "active" : "",
-                  weakHit ? "weak-match" : "",
-                  step === "weakness" && weakHit && !isActive ? "tut-want" : "",
-                ].join(" ")}
-                onClick={() => {
-                  activeIdRef.current = c.id;
-                  rerender();
-                }}
-              >
-                <div className={`card-label ${c.kind}`}>{label}</div>
-                <div className="card-jp">{c.word.display}</div>
-                <div className="card-romaji">
-                  <span className="typed">{typed}</span>
-                  <span className="rest">{rest}</span>
-                </div>
-                <div className="bar word-progress">
-                  <div
-                    className="bar-fill word-progress-fill"
-                    style={{ width: `${c.word.progress() * 100}%` }}
-                  />
-                </div>
-              </button>
-            );
+                    : `${g?.icon}${g?.label}${weakHit ? ` ⚡弱点×${TUNING.weaknessMult}` : ""}`;
+            const chip =
+              c.kind === "defense"
+                ? "🛡️"
+                : c.kind === "revive"
+                  ? "⛑️"
+                  : c.kind === "unison"
+                    ? "✨"
+                    : g?.icon ?? "❔";
+            return {
+              id: c.id,
+              kind: c.kind,
+              label,
+              chip,
+              word: c.word,
+              weak: weakHit,
+              want: step === "weakness" && weakHit,
+            };
           })}
-          {unisonReady && (
-            <div className="tut-waiting">↑ ✨ユニゾン を押してみよう</div>
-          )}
-        </div>
+        />
+        {unisonReady && (
+          <div className="tut-waiting">↑ ✨ユニゾン を押してみよう</div>
+        )}
 
         {okRef.current && <div className="tut-ok">✓ できた！</div>}
         {activeCard && step === "heal" && !healMode && (

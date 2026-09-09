@@ -53,6 +53,8 @@ src/game/room.ts       ルーム操作（プレイヤー共通アクション）
 src/game/host.ts       部屋主だけが動かす進行役（敵AI・ウェーブ進行・ユニゾン判定・ランキング登録）
 src/net/store.ts       通信抽象（FirebaseStore / LocalStore）＋ fireAndForget
 src/screens/           Title / Lobby / Battle / StageClear / Result / Ranking / Tutorial
+src/ui/WordReel.tsx    タイプワードのリールUI（1枚だけ見せて Tab で回す。本編とチュートリアルで共用）
+src/ui/TouchKeyboard.tsx スマホ用ゲーム内キーボード
 public/en/             ドット絵（Engineer Navigator から流用）
 database.rules.json    ★RTDB の DB全体ルール（TWINKLE と共用）
 ```

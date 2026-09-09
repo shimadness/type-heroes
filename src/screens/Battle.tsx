@@ -9,6 +9,7 @@ import {
 import type { Session } from "../App";
 import type {
   GimmickEvent,
+  PlayerState,
   RoomState,
   TelegraphEvent,
 } from "../game/types";
@@ -35,6 +36,7 @@ import { sfx } from "../sfx";
 import { fireAndForget } from "../net/store";
 import { alienFor, enAsset } from "../assets";
 import { TouchKeyboard, isTouchDevice } from "../ui/TouchKeyboard";
+import { WordReel, nextReelId, type ReelItem } from "../ui/WordReel";
 
 const TOUCH = isTouchDevice();
 
@@ -111,9 +113,13 @@ export function Battle({ session, state, onLeave }: Props) {
   const localSessionStats = useRef({ typed: 0, miss: 0, startAt: Date.now() });
   const inkUntil = useRef(0);
   const kataUntil = useRef(0);
+  // 攻撃予告の「自分の時計での」解決時刻。ホストの時計とズレていても
+  // 予告が消えない／早く消えることがないよう、受信時刻＋猶予で持つ
+  const teleLocalRef = useRef<Record<string, number>>({});
   const enemyHitAt = useRef<Record<string, number>>({});
   const comboRef = useRef(0);
   const activeCardRef = useRef<Card | null>(null);
+  const cardsRef = useRef<Card[]>([]);
 
   const brain = useMemo(() => new HostBrain(room), [room]);
 
@@ -180,6 +186,8 @@ export function Battle({ session, state, onLeave }: Props) {
       processedEvents.current.add(id);
       if (ev.type === "telegraph") {
         const t = ev as TelegraphEvent;
+        const resolveAt = Date.now() + Math.max(0, t.resolveAt - t.at);
+        teleLocalRef.current[id] = resolveAt;
         // 全体攻撃は targets:[] で送られるが、RTDB は空配列を削除するので undefined で届く
         const targets = t.targets ?? [];
         const targetsMe =
@@ -192,7 +200,7 @@ export function Battle({ session, state, onLeave }: Props) {
               kind: "defense",
               id,
               word: new TypingWord(w.d, w.k),
-              resolveAt: t.resolveAt,
+              resolveAt,
               defended: false,
             },
           ];
@@ -223,10 +231,17 @@ export function Battle({ session, state, onLeave }: Props) {
       const myself = s.players?.[room.myId];
       let changed = false;
       for (const card of [...defenseCardsRef.current]) {
+        const ev = (s.events ?? {})[card.id] as TelegraphEvent | undefined;
+        const attacker = ev ? (s.enemies ?? {})[String(ev.enemyIdx)] : undefined;
+        // 予告した敵が倒れた／ウェーブが進んで予告が消えた → 攻撃は来ない。カードも下げる
+        if (!ev || !attacker?.alive) {
+          defenseCardsRef.current = defenseCardsRef.current.filter((c) => c.id !== card.id);
+          changed = true;
+          continue;
+        }
         if (now < card.resolveAt) continue;
         defenseCardsRef.current = defenseCardsRef.current.filter((c) => c.id !== card.id);
         changed = true;
-        const ev = (s.events ?? {})[card.id] as TelegraphEvent | undefined;
         if (!myself?.alive) continue;
         const baseDmg = ev?.dmg ?? 10;
         const mult = Room.takenMult(myself) * (card.defended ? 0.5 : 1);
@@ -288,38 +303,16 @@ export function Battle({ session, state, onLeave }: Props) {
   const activeCard =
     cards.find((c) => c.id === activeCardId) ?? cards[0] ?? null;
   activeCardRef.current = activeCard;
+  cardsRef.current = cards;
   useEffect(() => {
     if (activeCard && activeCard.id !== activeCardId) setActiveCardId(activeCard.id);
   }, [activeCard, activeCardId]);
 
-  // ---------- ワード完了処理 ----------
-  const completeWord = useCallback(
-    async (card: Card) => {
-      const s = stateRef.current;
-      const myself = s.players?.[room.myId];
-      if (!myself) return;
+  /** ジャンルワード完了の効果（ダメージ／回復／ゲージ／バフ）。カード差し替え後に呼ばれる */
+  const applyGenreWord = useCallback(
+    async (card: GenreCard, myself: PlayerState, s: RoomState) => {
       const kanaLen = card.word.kana.length;
       const crit = card.word.missCount === 0;
-
-      if (card.kind === "defense") {
-        card.defended = true;
-        statsDelta.current.defended++;
-        addFloat("ガードじゅんびOK!", "float-guard", "self");
-        sfx.wordDone();
-        forceUpdate();
-        return;
-      }
-      if (card.kind === "revive") {
-        await room.revive(card.pid);
-        statsDelta.current.revived++;
-        reviveWordsRef.current.delete(card.pid);
-        addFloat("⛑️ふっかつ！", "float-heal", "self");
-        sfx.revive();
-        forceUpdate();
-        return;
-      }
-
-      // genre カード
       const chainCount = await room.registerChain();
       statsDelta.current.words++;
 
@@ -378,16 +371,61 @@ export function Battle({ session, state, onLeave }: Props) {
         TUNING.gaugePerWord * (myself.equip === "boots" ? 1.3 : 1);
       fireAndForget("ユニゾンゲージ加算", room.addGauge(gaugeGain));
       if (roleDef(myself.role).buffOnWord) fireAndForget("応援バフ", room.applyBuff());
+      forceUpdate();
+    },
+    [room, mode, targetKey, addFloat]
+  );
 
-      // カード入れ替え
+  // ---------- ワード完了処理 ----------
+  // カードの差し替えは通信を待たずに同期で行う。
+  // （通信待ちの間に敵が倒れる／シャッフルが来る／書き込みが失敗すると、
+  //   打ち終わったカードが差し替わらずに残り続けていた）
+  const completeWord = useCallback(
+    (card: Card) => {
+      const s = stateRef.current;
+      const myself = s.players?.[room.myId];
+      if (!myself) return;
+
+      if (card.kind === "defense") {
+        card.defended = true;
+        statsDelta.current.defended++;
+        addFloat("ガードじゅんびOK!", "float-guard", "self");
+        sfx.wordDone();
+        // ガード済みカードは攻撃が解決するまで残るので、リールを次のワードへ進めて手を止めさせない
+        setActiveCardId(nextReelId(cardsRef.current, card.id));
+        forceUpdate();
+        return;
+      }
+      if (card.kind === "revive") {
+        // 仲間が alive になるまでは完了済みカードを見せておき、state 更新で自然に消える。
+        // 失敗したら打ち直せるよう新しいワードに差し替える
+        sfx.revive();
+        addFloat("⛑️ふっかつ！", "float-heal", "self");
+        forceUpdate();
+        room
+          .revive(card.pid)
+          .then(() => {
+            statsDelta.current.revived++;
+          })
+          .catch((e) => {
+            console.warn("[TYPE HEROES] 蘇生の書き込みに失敗", e);
+            const w = pickRevive();
+            reviveWordsRef.current.set(card.pid, new TypingWord(w.d, w.k));
+            forceUpdate();
+          });
+        return;
+      }
+
+      // genre カード: 先に次のワードへ差し替えてから、ダメージ等を非同期で反映
       genreCardsRef.current = genreCardsRef.current.map((c) =>
         c.id === card.id
           ? makeGenreCard(genreCardsRef.current.filter((x) => x.id !== c.id).map((x) => x.genre))
           : c
       );
       forceUpdate();
+      fireAndForget("ワード完了の反映", applyGenreWord(card, myself, s));
     },
-    [room, mode, targetKey, addFloat, makeGenreCard, forceUpdate]
+    [room, addFloat, makeGenreCard, forceUpdate, applyGenreWord]
   );
 
   // ---------- 1打鍵の処理（物理キーボードとタッチキーボード共通） ----------
@@ -462,14 +500,20 @@ export function Battle({ session, state, onLeave }: Props) {
       if (e.key === "Tab") {
         e.preventDefault();
         if (cards.length > 1 && activeCard) {
-          const idx = cards.findIndex((c) => c.id === activeCard.id);
-          setActiveCardId(cards[(idx + 1) % cards.length].id);
+          setActiveCardId(nextReelId(cards, activeCard.id, e.shiftKey ? -1 : 1));
         }
         return;
       }
       if (e.key === " ") {
         e.preventDefault();
         setMode((m) => (m === "attack" ? "heal" : "attack"));
+        return;
+      }
+      // 数字キーでターゲット変更（敵カードの番号バッジと対応。ワードに数字は出ない）
+      if (/^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        const key = String(Number(e.key) - 1);
+        if (stateRef.current.enemies?.[key]?.alive) setTargetKey(key);
         return;
       }
       if (!/^[a-z0-9\-,.!?/]$/i.test(e.key)) return;
@@ -554,10 +598,13 @@ export function Battle({ session, state, onLeave }: Props) {
   const tuning = DIFF_TUNING[state.meta.diff];
   const survival = isSurvival(state);
 
-  // 敵の攻撃予告（画面表示用）
-  const telegraphs = Object.entries(state.events ?? {}).filter(
-    ([, ev]) => ev.type === "telegraph" && (ev as TelegraphEvent).resolveAt > now
-  ) as [string, TelegraphEvent][];
+  // 敵の攻撃予告（画面表示用）。倒れた敵の予告は出さない
+  const telegraphs = Object.entries(state.events ?? {}).filter(([id, ev]) => {
+    if (ev.type !== "telegraph") return false;
+    const t = ev as TelegraphEvent;
+    const localAt = teleLocalRef.current[id] ?? t.resolveAt;
+    return localAt > now && !!(state.enemies ?? {})[String(t.enemyIdx)]?.alive;
+  }) as [string, TelegraphEvent][];
 
   const infoEvents = Object.entries(state.events ?? {})
     .filter(([, ev]) => ev.type === "info" && now - ev.at < 4000)
@@ -641,6 +688,23 @@ export function Battle({ session, state, onLeave }: Props) {
             ✨ユニゾン
           </button>
         </div>
+        {!isSpectator && (
+          <button
+            className="btn ghost giveup-btn"
+            title={isHost ? "パーティー全員のバトルを終わらせる" : "パーティーをぬけてタイトルへ"}
+            onClick={() => {
+              if (isHost) {
+                if (window.confirm("あきらめる？（全員のバトルが終わり、ぜんめつ扱いになります）")) {
+                  fireAndForget("あきらめる", brain.giveUp(stateRef.current));
+                }
+              } else if (window.confirm("パーティーをぬけてタイトルにもどる？")) {
+                onLeave();
+              }
+            }}
+          >
+            🏳️ あきらめる
+          </button>
+        )}
       </div>
 
       {/* ---- バナー ---- */}
@@ -668,6 +732,7 @@ export function Battle({ session, state, onLeave }: Props) {
           if (!kind) return null;
           const genre = GENRES.find((g) => g.id === e.weakness);
           const tele = telegraphs.find(([, t]) => String(t.enemyIdx) === key);
+          const teleAt = tele ? teleLocalRef.current[tele[0]] ?? tele[1].resolveAt : 0;
           const hitRecently = now - (enemyHitAt.current[key] ?? 0) < 200;
           return (
             <button
@@ -683,6 +748,11 @@ export function Battle({ session, state, onLeave }: Props) {
               disabled={!e.alive}
             >
               {key === targetKey && e.alive && <div className="target-marker">▼ターゲット</div>}
+              {e.alive && Number(key) < 9 && (
+                <span className="enemy-num" title={`${Number(key) + 1} キーでねらう`}>
+                  {Number(key) + 1}
+                </span>
+              )}
               <img
                 className={`enemy-sprite ${e.alive ? "" : "ko"}`}
                 src={enAsset(kind.sprite)}
@@ -708,7 +778,7 @@ export function Battle({ session, state, onLeave }: Props) {
               )}
               {tele && (
                 <div className="telegraph-warn">
-                  ⚠️こうげき! {Math.max(0, Math.ceil((tele[1].resolveAt - now) / 1000))}
+                  ⚠️こうげき! {Math.max(0, Math.ceil((teleAt - now) / 1000))}
                 </div>
               )}
             </button>
@@ -822,56 +892,53 @@ export function Battle({ session, state, onLeave }: Props) {
                 >
                   💚 かいふく
                 </button>
-                <span className="mode-hint">Spaceで切替 / Tabでカード切替</span>
+                <span className="mode-hint">Space: 切替 ／ Tab: つぎのワード ／ 1〜9: ねらう敵</span>
               </div>
-              <div className="card-row">
-                {cards.map((c) => {
-                  const isActive = activeCard?.id === c.id;
-                  const genre = c.kind === "genre" ? GENRES.find((g) => g.id === c.genre) : null;
+              <WordReel
+                activeId={activeCard?.id ?? ""}
+                onSelect={setActiveCardId}
+                items={cards.map((c): ReelItem => {
                   const targetEnemy = (state.enemies ?? {})[targetKey];
+                  if (c.kind === "defense") {
+                    const left = Math.max(0, Math.ceil((c.resolveAt - now) / 1000));
+                    return {
+                      id: c.id,
+                      kind: "defense",
+                      chip: "🛡️",
+                      word: c.word,
+                      label: c.defended
+                        ? `🛡️ガードOK! あと${left}秒`
+                        : `🛡️ぼうぎょ! のこり${left}秒`,
+                    };
+                  }
+                  if (c.kind === "revive") {
+                    return {
+                      id: c.id,
+                      kind: "revive",
+                      chip: "⛑️",
+                      word: c.word,
+                      label: `⛑️そせい: ${state.players?.[c.pid]?.name ?? ""}`,
+                    };
+                  }
+                  const genre = GENRES.find((g) => g.id === c.genre);
                   const weakHit =
-                    c.kind === "genre" &&
-                    mode === "attack" &&
-                    targetEnemy?.alive &&
-                    targetEnemy.weakness === (c as GenreCard).genre;
+                    mode === "attack" && !!targetEnemy?.alive && targetEnemy.weakness === c.genre;
                   const weakMult = weakHit
                     ? ENEMY_KINDS[targetEnemy!.kind]?.boss
                       ? TUNING.bossWeaknessMult
                       : TUNING.weaknessMult
                     : 1;
-                  const label =
-                    c.kind === "defense"
-                      ? `🛡️ぼうぎょ! のこり${Math.max(0, Math.ceil(((c as DefenseCard).resolveAt - now) / 1000))}秒`
-                      : c.kind === "revive"
-                        ? `⛑️そせい: ${state.players?.[(c as ReviveCard).pid]?.name ?? ""}`
-                        : `${genre?.icon}${genre?.label}${weakHit ? ` ⚡弱点×${weakMult}` : ""}`;
-                  return (
-                    <button
-                      key={c.id}
-                      className={[
-                        "word-card",
-                        c.kind,
-                        isActive ? "active" : "",
-                        c.kind === "genre" &&
-                        mode === "attack" &&
-                        (state.enemies ?? {})[targetKey]?.weakness === (c as GenreCard).genre
-                          ? "weak-match"
-                          : "",
-                      ].join(" ")}
-                      onClick={() => setActiveCardId(c.id)}
-                    >
-                      <div className={`card-label ${c.kind}`}>{label}</div>
-                      {dispWord(c.word, katakanaMode && c.kind === "genre")}
-                      <div className="bar word-progress">
-                        <div
-                          className="bar-fill word-progress-fill"
-                          style={{ width: `${c.word.progress() * 100}%` }}
-                        />
-                      </div>
-                    </button>
-                  );
+                  return {
+                    id: c.id,
+                    kind: "genre",
+                    chip: genre?.icon ?? "❔",
+                    word: c.word,
+                    weak: weakHit,
+                    kata: katakanaMode,
+                    label: `${genre?.icon}${genre?.label}${weakHit ? ` ⚡弱点×${weakMult}` : ""}`,
+                  };
                 })}
-              </div>
+              />
               <div className="stat-row">
                 <span className={`combo ${combo >= 10 ? "hot" : ""}`}>
                   🔥コンボ {combo}

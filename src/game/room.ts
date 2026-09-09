@@ -14,9 +14,36 @@ import type {
 import type { Difficulty, GenreId } from "../typing/words";
 import { PLAYER_MAX_HP, TUNING, roleDef } from "./data";
 import type { TeamDifficulty } from "./data";
-import type { GameMode, RoleId } from "./types";
+import type { EquipId, GameMode, RoleId } from "./types";
 
 export const ROOT = "typing";
+
+/** 心拍（lastSeen 更新）の間隔 */
+export const HEARTBEAT_MS = 5000;
+/** 部屋の使用中判定: 最後の心拍からこれ以上経っていたら「もういない」とみなす */
+export const LIVE_WINDOW_MS = 60000;
+
+/**
+ * ちゃんと中身のあるプレイヤーか。
+ * 通信断で onDisconnect がノードを消したあと、心拍だけが `{lastSeen}` を書き戻して
+ * 名前もHPもない「ゾンビ」が残ることがある。そういうのは居ないものとして扱う。
+ */
+export function isLivePlayer(p: unknown): p is PlayerState {
+  const q = p as Partial<PlayerState> | null | undefined;
+  return !!q && typeof q.hp === "number" && typeof q.name === "string";
+}
+
+/** いまも遊んでいそうなプレイヤー（ゾンビ・心拍が途絶えた人・観戦者を除く） */
+export function livePlayersOf(
+  players: Record<string, unknown> | null | undefined,
+  now = Date.now()
+): [string, PlayerState][] {
+  return Object.entries(players ?? {}).filter((e): e is [string, PlayerState] => {
+    const p = e[1];
+    if (!isLivePlayer(p) || p.spectator) return false;
+    return now - (p.lastSeen ?? 0) < LIVE_WINDOW_MS;
+  });
+}
 
 /** パスワードを RTDB キーとして安全な形に整える */
 export function sanitizeRoomCode(pw: string): string {
@@ -46,6 +73,12 @@ export class Room {
   readonly myId: string;
   readonly spectator: boolean;
   private hbTimer: ReturnType<typeof setInterval> | null = null;
+  /** 自分の最新状態（ノードが消されたときの復元用） */
+  private self: PlayerState | null = null;
+  private left = false;
+  private lastRestoreAt = 0;
+  /** 参加した部屋の createdAt。別の人が同じあいことばで作り直した部屋には復元しない */
+  private roomCreatedAt = 0;
 
   constructor(store: Store, code: string, myId: string, spectator = false) {
     this.store = store;
@@ -86,9 +119,19 @@ export class Room {
       rage: 0,
       gauge: 0,
     };
+    // write は配下ごと置き換えるので、放置された古い部屋（players/enemies/events）は消える
     await store.write(room.base, { meta });
+    room.roomCreatedAt = meta.createdAt;
     await room.writeSelf(profile);
     return room;
+  }
+
+  /** 部屋に「いまも遊んでいる人」がいるか（あいことばの使用中判定） */
+  static async hasLivePlayers(store: Store, code: string): Promise<boolean> {
+    const players = (await store.read(`${ROOT}/rooms/${code}/players`)) as
+      | Record<string, unknown>
+      | null;
+    return livePlayersOf(players).length > 0;
   }
 
   static async join(
@@ -96,10 +139,19 @@ export class Room {
     code: string,
     profile: JoinProfile
   ): Promise<Room> {
-    const meta = (await store.read(`${ROOT}/rooms/${code}/meta`)) as RoomMeta | null;
+    const data = (await store.read(`${ROOT}/rooms/${code}`)) as RoomState | null;
+    const meta = data?.meta;
     if (!meta) throw new Error("そのあいことばの部屋が見つからないよ");
-    if (meta.status !== "lobby") throw new Error("この部屋はもう出発してしまった…（観戦は可能）");
+    if (meta.status !== "lobby") {
+      // 全滅・クリア後に全員タイトルへ戻った部屋は「出発済み」のまま残る。
+      // 誰も残っていなければ同じあいことばで作り直す（難易度・モードは引き継ぐ）
+      if (livePlayersOf(data?.players).length === 0) {
+        return Room.create(store, code, profile, meta.diff, meta.mode ?? "story");
+      }
+      throw new Error("この部屋はもう出発してしまった…（観戦は可能）");
+    }
     const room = new Room(store, code, newPlayerId());
+    room.roomCreatedAt = meta.createdAt;
     await room.writeSelf(profile);
     return room;
   }
@@ -124,25 +176,57 @@ export class Room {
       equip: "none",
       stats: emptyStats(),
     };
+    this.self = p;
     await this.store.write(this.myPath, p);
     this.store.onDisconnectRemove(this.myPath);
     this.hbTimer = setInterval(() => {
       this.store.update(this.myPath, { lastSeen: Date.now() }).catch(() => {});
-    }, 5000);
+    }, HEARTBEAT_MS);
   }
 
   subscribe(cb: (state: RoomState | null) => void): Unsubscribe {
     return this.store.subscribe(this.base, (v) => {
-      cb((v as RoomState) ?? null);
+      const state = (v as RoomState) ?? null;
+      this.keepSelfAlive(state);
+      cb(state);
     });
   }
 
+  /**
+   * 通信断からの復帰対策。
+   * 切断中に onDisconnect が自分のノードを消し、復帰後は心拍が `{lastSeen}` だけを
+   * 書き戻すので、名前もHPもないゾンビになってしまう（次ステージへ進めない等の原因）。
+   * 自分の最新状態を覚えておき、消えていたら書き戻す。
+   */
+  private keepSelfAlive(state: RoomState | null) {
+    if (this.spectator || this.left || !state?.meta) return;
+    const cur = state.players?.[this.myId];
+    if (isLivePlayer(cur)) {
+      this.self = cur;
+      return;
+    }
+    if (!this.self) return;
+    // 別の人が同じあいことばで作り直した部屋なら、そこには入り込まない
+    if (this.roomCreatedAt && state.meta.createdAt !== this.roomCreatedAt) return;
+    const now = Date.now();
+    if (now - this.lastRestoreAt < 3000) return;
+    this.lastRestoreAt = now;
+    const restored: PlayerState = { ...this.self, lastSeen: now };
+    this.store.write(this.myPath, restored).catch((e) => {
+      console.warn("[TYPE HEROES] 自分の状態の復元に失敗", e);
+    });
+    // onDisconnect は発火すると消えるので張り直す
+    this.store.onDisconnectRemove(this.myPath);
+  }
+
   async leave() {
+    this.left = true;
     if (this.hbTimer) clearInterval(this.hbTimer);
-    if (!this.spectator) await this.store.remove(this.myPath).catch?.(() => {});
+    if (!this.spectator) await this.store.remove(this.myPath).catch(() => {});
   }
 
   dispose() {
+    this.left = true;
     if (this.hbTimer) clearInterval(this.hbTimer);
   }
 
@@ -154,6 +238,11 @@ export class Room {
 
   setTeamDiff(diff: TeamDifficulty) {
     return this.store.update(`${this.base}/meta`, { diff });
+  }
+
+  /** ステージクリア画面での装備えらび */
+  setEquip(equip: EquipId) {
+    return this.store.update(this.myPath, { equip });
   }
 
   // ---------- battle: 攻撃・回復 ----------
@@ -328,15 +417,16 @@ export class Room {
   }
 }
 
-/** 生きているプレイヤー一覧（観戦者除く） */
+/** 生きているプレイヤー一覧（観戦者・ゾンビ除く） */
 export function alivePlayers(state: RoomState): [string, PlayerState][] {
-  return Object.entries(state.players ?? {}).filter(
-    ([, p]) => p.alive && !p.spectator
-  );
+  return allPlayers(state).filter(([, p]) => p.alive);
 }
 
+/** パーティー全員（観戦者・ゾンビ除く）。ゾンビを混ぜると hp/maxHp が NaN になって書き込みが失敗する */
 export function allPlayers(state: RoomState): [string, PlayerState][] {
-  return Object.entries(state.players ?? {}).filter(([, p]) => !p.spectator);
+  return Object.entries(state.players ?? {}).filter(
+    (e): e is [string, PlayerState] => isLivePlayer(e[1]) && !e[1].spectator
+  );
 }
 
 export function aliveEnemies(state: RoomState): [string, EnemyState][] {

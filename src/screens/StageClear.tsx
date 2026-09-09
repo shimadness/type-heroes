@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { Session } from "../App";
 import type { RoomState } from "../game/types";
-import { ENEMY_KINDS, STAGES, equipDef, roleDef } from "../game/data";
+import { ENEMY_KINDS, EQUIPS, STAGES, equipDef, recommendEquip, roleDef } from "../game/data";
 import { enAsset } from "../assets";
 import { fireAndForget } from "../net/store";
 import { HostBrain } from "../game/host";
@@ -15,11 +15,19 @@ interface Props {
 
 export function StageClear({ session, state }: Props) {
   const { room } = session;
+  const me = state.players?.[room.myId];
   const isHost = state.meta.hostId === room.myId;
   const stage = STAGES[state.meta.stageIdx];
   const nextStage = STAGES[state.meta.stageIdx + 1];
   const players = allPlayers(state).sort((a, b) => a[1].joinedAt - b[1].joinedAt);
   const brain = useMemo(() => new HostBrain(room), [room]);
+  // おすすめ（実績から導いた得意な行動）。ホストが初期値として配っているので、放置しても同じ結果になる
+  const rec = useMemo(
+    () => (me ? recommendEquip(me, players.map(([, p]) => p)) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [room.myId, state.meta.stageIdx]
+  );
+  const canPick = !!me && !room.spectator;
 
   return (
     <div className="screen center stageclear-screen" style={{ background: stage.bg }}>
@@ -39,20 +47,44 @@ export function StageClear({ session, state }: Props) {
       })()}
 
       <div className="drop-panel">
-        <h3>🎁 そうびを手に入れた！</h3>
-        {players.map(([pid, p]) => {
-          const eq = equipDef(p.equip);
-          return (
-            <div key={pid} className="drop-row">
-              <span>
-                {roleDef(p.role).icon} {p.name}
-              </span>
-              <span className="drop-item">
-                {eq ? `${eq.icon} ${eq.label}（${eq.desc}）` : "─"}
-              </span>
-            </div>
-          );
-        })}
+        <h3>{canPick ? "🎁 そうびを えらぼう" : "🎁 そうびを手に入れた！"}</h3>
+        {canPick && me && (
+          <div className="equip-grid">
+            {EQUIPS.map((eq) => {
+              const sel = me.equip === eq.id;
+              const isRec = rec?.equip === eq.id;
+              return (
+                <button
+                  key={eq.id}
+                  className={`equip-card ${sel ? "sel" : ""} ${isRec ? "rec" : ""}`}
+                  onClick={() => fireAndForget("装備えらび", room.setEquip(eq.id))}
+                >
+                  {isRec && (
+                    <span className="equip-rec">⭐おすすめ（{rec!.reason}）</span>
+                  )}
+                  <span className="equip-icon">{eq.icon}</span>
+                  <span className="equip-name">{eq.label}</span>
+                  <span className="equip-desc">{eq.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="drop-list">
+          {players.map(([pid, p]) => {
+            const eq = equipDef(p.equip);
+            return (
+              <div key={pid} className={`drop-row ${pid === room.myId ? "me" : ""}`}>
+                <span>
+                  {roleDef(p.role).icon} {p.name}
+                </span>
+                <span className="drop-item">
+                  {eq ? `${eq.icon} ${eq.label}（${eq.desc}）` : "─"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {nextStage && (
@@ -66,7 +98,7 @@ export function StageClear({ session, state }: Props) {
           つぎのステージへ すすむ！
         </button>
       ) : (
-        <div className="wait-note">部屋主が すすめるのを待っています…</div>
+        <div className="wait-note">そうびをえらんだら、部屋主が すすめるのを待とう…</div>
       )}
     </div>
   );

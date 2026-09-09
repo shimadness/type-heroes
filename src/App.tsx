@@ -55,12 +55,9 @@ export default function App() {
         const store = new FirebaseStore();
         const code = sanitizeRoomCode(pw);
         if (code.length < 3) throw new Error("あいことばは3文字以上にしてね");
-        const existing = await store.read(`typing/rooms/${code}/meta`);
-        if (
-          existing &&
-          Date.now() - ((existing as { createdAt?: number }).createdAt ?? 0) <
-            3 * 60 * 60 * 1000
-        ) {
+        // 「使用中」＝いまも遊んでいる人がいる部屋だけ。
+        // 全滅・クリア後に全員がタイトルへ戻った部屋は同じあいことばで作り直せる
+        if (await Room.hasLivePlayers(store, code)) {
           throw new Error("そのあいことばは使用中！べつのあいことばにするか「あいことばで参加」してね");
         }
         const room = await Room.create(store, code, profile, teamDiff, mode);

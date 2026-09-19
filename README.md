@@ -1,6 +1,6 @@
 # TYPE HEROES 〜みんなでタイピングクエスト〜
 
-▶ **あそぶ: https://shimadness.github.io/type-heroes/**
+▶ **あそぶ: https://typeheroes.net/**
 
 
 チームで協力してステージをクリアしていくタイピングRPG。

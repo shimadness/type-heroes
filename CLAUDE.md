@@ -1,7 +1,7 @@
 # TYPE HEROES 開発ガイド
 
 チームで協力してステージをクリアするタイピングRPG。
-本番: https://shimadness.github.io/type-heroes/ （main への push で自動デプロイ）
+本番: https://typeheroes.net/ （main への push で自動デプロイ）
 
 ## ★チュートリアル同期ルール（最重要）
 

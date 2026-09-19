@@ -7,6 +7,7 @@
 // ============================================================
 import type { CSSProperties } from "react";
 import { hiraToKata, type TypingWord } from "../typing/romaji";
+import { PixelIcon, Px } from "./PixelIcon";
 
 export interface ReelItem {
   id: string;
@@ -59,7 +60,7 @@ export function WordReel({ items, activeId, onSelect }: Props) {
             onClick={next}
             title={many ? "タップ / Tab でつぎのワード" : undefined}
           >
-            <div className={`card-label ${active.kind}`}>{active.label}</div>
+            <div className={`card-label ${active.kind}`}><Px>{active.label}</Px></div>
             <div className="card-jp">
               {active.kata ? hiraToKata(active.word.display) : active.word.display}
             </div>
@@ -103,7 +104,8 @@ export function WordReel({ items, activeId, onSelect }: Props) {
               onClick={() => onSelect(it.id)}
               title={it.label}
             >
-              {it.chip}
+              <Px>{it.chip}</Px>
+              {it.weak && <PixelIcon name="bolt" />}
             </button>
           ))}
         </div>

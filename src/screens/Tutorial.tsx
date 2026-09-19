@@ -27,6 +27,7 @@ import { alienFor, enAsset } from "../assets";
 import { sfx } from "../sfx";
 import { TouchKeyboard, isTouchDevice } from "../ui/TouchKeyboard";
 import { WordReel, nextReelId, type ReelItem } from "../ui/WordReel";
+import { PixelIcon, Px } from "../ui/PixelIcon";
 
 const TOUCH = isTouchDevice();
 
@@ -406,41 +407,41 @@ export function Tutorial({ onExit }: Props) {
     const missTier = TEAM_DIFFS.map((d) => DIFF_TUNING[d]).find((t) => t.missSelfDamage > 0);
     return (
       <div className="screen center tutorial-done-screen">
-        <h1 className="clear-title">🎓 チュートリアル しゅうりょう！</h1>
+        <h1 className="clear-title"><PixelIcon name="book" /> チュートリアル しゅうりょう！</h1>
         <div className="tutorial-summary">
           <div className="tut-sum-row">
-            <span>⚡</span>
+            <span><PixelIcon name="bolt" /></span>
             <span>
               弱点カードは ×{TUNING.weaknessMult}、ボスなら ×{TUNING.bossWeaknessMult}。
               速く打つより <b>選んで打つ</b> ほうが強い
             </span>
           </div>
           <div className="tut-sum-row">
-            <span>🔗</span>
+            <span><PixelIcon name="chain" /></span>
             <span>
               仲間の完了から{Math.round(TUNING.chainWindow / 1000)}秒以内に完了すると
               チェイン（最大+{Math.round(TUNING.chainBonusMax * 100)}%）
             </span>
           </div>
           <div className="tut-sum-row">
-            <span>🔢</span>
+            <span><PixelIcon name="numbers" /></span>
             <span>
               敵が複数いるときは <b>1〜9 キー</b>（またはタップ）でねらう敵を変えられる
             </span>
           </div>
           <div className="tut-sum-row">
-            <span>🎁</span>
+            <span><PixelIcon name="chest" /></span>
             <span>
               ステージクリアで <b>そうびを1つえらぶ</b>。実績から見た「得意な行動」に合う
               おすすめが最初から選ばれているので、迷ったらそのままでOK
             </span>
           </div>
           <div className="tut-sum-row">
-            <span>{roleDef("healer").icon}</span>
+            <span><Px>{roleDef("healer").icon}</Px></span>
             <span>ヒーラーが1人いると安定。ロールとなまえは部屋（じゅんびのやかた）で決める</span>
           </div>
           <div className="tut-sum-row">
-            <span>{roleDef("berserker").icon}</span>
+            <span><Px>{roleDef("berserker").icon}</Px></span>
             <span>
               {roleDef("berserker").label}は <b>ノーミスで打ち切るごとに火力+
               {Math.round(BERSERK.perStack * 100)}%</b>（最大×{FURY_MAX_MULT}）。
@@ -448,7 +449,7 @@ export function Tutorial({ onExit }: Props) {
             </span>
           </div>
           <div className="tut-sum-row">
-            <span>🏕️</span>
+            <span><PixelIcon name="tent" /></span>
             <span>
               難易度は部屋（じゅんびのやかた）で決める。
               <b>自分の出題だけ「かんたん」</b>にもできるので、
@@ -457,7 +458,7 @@ export function Tutorial({ onExit }: Props) {
           </div>
           {missTier && (
             <div className="tut-sum-row">
-              <span>💥</span>
+              <span><PixelIcon name="burst" /></span>
               <span>
                 てきの強さ「{missTier.label}」以上は、<b>ミスすると自分のHPが -{missTier.missSelfDamage}</b>。
                 せいかくに打つほど強い
@@ -465,7 +466,7 @@ export function Tutorial({ onExit }: Props) {
             </div>
           )}
           <div className="tut-sum-row">
-            <span>☠️</span>
+            <span><PixelIcon name="skull" /></span>
             <span>
               トップの「うぉーろーど」は終わりなき戦い。{SURVIVAL.bossEvery}ウェーブごとにボス、
               全滅するまでに<b>たおした数</b>をきそう。難易度は同じく部屋で決める
@@ -505,8 +506,8 @@ export function Tutorial({ onExit }: Props) {
 
       {/* ヒント（1行＋補足1行だけ） */}
       <div className="tutorial-hint">
-        <div className="tut-hint-main">{HINTS[step].main}</div>
-        {HINTS[step].sub && <div className="tut-hint-sub">{HINTS[step].sub}</div>}
+        <div className="tut-hint-main"><Px>{HINTS[step].main}</Px></div>
+        {HINTS[step].sub && <div className="tut-hint-sub"><Px>{HINTS[step].sub}</Px></div>}
       </div>
 
       {/* 敵 */}
@@ -524,7 +525,7 @@ export function Tutorial({ onExit }: Props) {
               draggable={false}
             />
             <div className="enemy-name">
-              {enemyKind.boss && "👑"}
+              {enemyKind.boss && <PixelIcon name="crown" />}
               {enemyKind.name}
             </div>
             <div className="bar enemy-hp-bar">
@@ -535,20 +536,20 @@ export function Tutorial({ onExit }: Props) {
             </div>
             {step === "weakness" && (
               <div className="weakness-chip">
-                弱点:{genreOf(weakGenre).icon}
+                弱点:<Px>{genreOf(weakGenre).icon}</Px>
                 {genreOf(weakGenre).label} ×{TUNING.weaknessMult}
               </div>
             )}
             {tele && (
               <div className="telegraph-warn">
-                ⚠️こうげき! {Math.max(0, Math.ceil((tele.until - now) / 1000))}
+                <PixelIcon name="warning" />こうげき! {Math.max(0, Math.ceil((tele.until - now) / 1000))}
               </div>
             )}
           </div>
         )}
         <div className="float-layer enemy-floats">
           {flashRef.current && (
-            <div className={`float ${flashRef.current.cls}`}>{flashRef.current.text}</div>
+            <div className={`float ${flashRef.current.cls}`}><Px>{flashRef.current.text}</Px></div>
           )}
         </div>
       </div>
@@ -558,7 +559,7 @@ export function Tutorial({ onExit }: Props) {
         <div className="player-card me">
           <div className="player-head">
             <img className="avatar" src={alienFor(0, myHpRef.current >= 60)} alt="" />
-            <span className="player-role">{roleDef("attacker").icon}</span>
+            <span className="player-role"><Px>{roleDef("attacker").icon}</Px></span>
             <span className="player-name">きみ</span>
           </div>
           <div className="bar player-hp-bar">
@@ -574,7 +575,7 @@ export function Tutorial({ onExit }: Props) {
         <div className={`player-card ${allyAliveRef.current ? "" : "downed"}`}>
           <div className="player-head">
             <img className="avatar" src={alienFor(1, allyAliveRef.current)} alt="" />
-            <span className="player-role">{roleDef("healer").icon}</span>
+            <span className="player-role"><Px>{roleDef("healer").icon}</Px></span>
             <span className="player-name">なかま</span>
           </div>
           <div className="bar player-hp-bar">
@@ -584,7 +585,7 @@ export function Tutorial({ onExit }: Props) {
             />
           </div>
           <div className="player-hp-num">
-            {allyAliveRef.current ? `${allyHpRef.current}/${MAX_HP}` : "😵 きぜつ中"}
+            <Px>{allyAliveRef.current ? `${allyHpRef.current}/${MAX_HP}` : "😵 きぜつ中"}</Px>
           </div>
         </div>
       </div>
@@ -599,7 +600,7 @@ export function Tutorial({ onExit }: Props) {
               rerender();
             }}
           >
-            ⚔️ こうげき
+            <PixelIcon name="swords" /> こうげき
           </button>
           <button
             className={`mode-btn heal ${healMode ? "sel" : ""} ${
@@ -610,7 +611,7 @@ export function Tutorial({ onExit }: Props) {
               rerender();
             }}
           >
-            💚 かいふく
+            <PixelIcon name="heart" /> かいふく
           </button>
           {step === "unison" && (
             <button
@@ -618,7 +619,7 @@ export function Tutorial({ onExit }: Props) {
               disabled={!unisonReady}
               onClick={fireUnison}
             >
-              ✨ユニゾン
+              <PixelIcon name="sparkle" />ユニゾン
             </button>
           )}
         </div>
@@ -661,15 +662,15 @@ export function Tutorial({ onExit }: Props) {
           })}
         />
         {unisonReady && (
-          <div className="tut-waiting">↑ ✨ユニゾン を押してみよう</div>
+          <div className="tut-waiting">↑ <PixelIcon name="sparkle" />ユニゾン を押してみよう</div>
         )}
 
         {okRef.current && <div className="tut-ok">✓ できた！</div>}
         {activeCard && step === "heal" && !healMode && (
           <div className="tut-nudge">
-            {TOUCH
+            <Px>{TOUCH
               ? "💚かいふく をタップしてから打とう"
-              : "Space をおして 💚かいふく にしてから打とう"}
+              : "Space をおして 💚かいふく にしてから打とう"}</Px>
           </div>
         )}
       </div>

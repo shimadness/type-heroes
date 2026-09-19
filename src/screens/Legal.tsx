@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Px } from "../ui/PixelIcon";
 
 // 利用規約・プライバシーポリシー。
 // 本文は「実際にこのゲームが何を保存しているか」に合わせて書いてある。
@@ -212,7 +213,7 @@ export function Legal({ onBack, initialTab = "terms" }: Props) {
             className={`diff-btn ${tab === t.id ? "sel" : ""}`}
             onClick={() => setTab(t.id)}
           >
-            {t.label}
+            <Px>{t.label}</Px>
           </button>
         ))}
       </div>

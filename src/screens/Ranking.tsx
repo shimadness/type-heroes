@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DIFF_TUNING, TEAM_DIFFS, type TeamDifficulty } from "../game/data";
 import type { CSSProperties } from "react";
+import { PixelIcon, Px } from "../ui/PixelIcon";
 
 interface Props {
   onBack: () => void;
@@ -73,7 +74,7 @@ export function Ranking({ onBack }: Props) {
 
   return (
     <div className="screen ranking-screen center">
-      <h1>🏆 チームランキング</h1>
+      <h1><PixelIcon name="trophy" /> でんせつのきろく</h1>
       <div className="diff-row board-row">
         {BOARDS.map((b) => (
           <button
@@ -82,7 +83,7 @@ export function Ranking({ onBack }: Props) {
             style={{ "--diff-color": "var(--gold)" } as CSSProperties}
             onClick={() => setBoard(b.id)}
           >
-            {b.label}
+            <Px>{b.label}</Px>
           </button>
         ))}
       </div>
@@ -108,7 +109,7 @@ export function Ranking({ onBack }: Props) {
         {entries?.map((e, i) => (
           <div key={i} className={`ranking-row rank-${i + 1}`}>
             <span className="rank-no">
-              {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}位`}
+              <Px>{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}位`}</Px>
             </span>
             <span className="rank-names">{e.names?.join("・")}</span>
             <span className="rank-time">

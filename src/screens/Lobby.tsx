@@ -8,6 +8,7 @@ import { allPlayers, isSurvival } from "../game/room";
 import { alienFor } from "../assets";
 import { fireAndForget } from "../net/store";
 import type { CSSProperties } from "react";
+import { PixelIcon, Px } from "../ui/PixelIcon";
 
 interface Props {
   session: Session;
@@ -48,10 +49,10 @@ export function Lobby({ session, state, onLeave }: Props) {
   return (
     <div className="screen lobby-screen">
       <div className="lobby-head">
-        <h2>🏕️ じゅんびのやかた</h2>
+        <h2><PixelIcon name="tent" /> じゅんびのやかた</h2>
         {survival && (
           <div className="mode-banner" title={`${SURVIVAL.bossEvery}ウェーブごとにボス。全滅したら終了`}>
-            ☠️ うぉーろーど（サバイバル）— たおした数をきそう
+            <PixelIcon name="skull" /> うぉーろーど（サバイバル）— たおした数をきそう
           </div>
         )}
         {!session.isLocal && (
@@ -68,10 +69,10 @@ export function Lobby({ session, state, onLeave }: Props) {
           {players.map(([pid, p], idx) => (
             <div key={pid} className={`member-row ${pid === room.myId ? "me" : ""}`}>
               <img className="avatar" src={alienFor(idx, true)} alt="" draggable={false} />
-              <span className="member-role">{roleDef(p.role).icon}</span>
+              <span className="member-role"><Px>{roleDef(p.role).icon}</Px></span>
               <span className="member-name">
                 {p.name}
-                {pid === state.meta.hostId && <span className="host-badge">👑部屋主</span>}
+                {pid === state.meta.hostId && <span className="host-badge"><PixelIcon name="crown" />部屋主</span>}
                 {pid === room.myId && <span className="me-badge">じぶん</span>}
               </span>
               <span className="member-diff" style={diffStyle(DIFF_TUNING[p.diff].color)}>
@@ -110,7 +111,7 @@ export function Lobby({ session, state, onLeave }: Props) {
                     onClick={() => fireAndForget("ロール変更", room.setProfile({ role: r.id }))}
                     title={r.desc}
                   >
-                    <span className="role-icon">{r.icon}</span>
+                    <span className="role-icon"><Px>{r.icon}</Px></span>
                     <span className="role-name">{r.label}</span>
                   </button>
                 ))}
@@ -159,7 +160,7 @@ export function Lobby({ session, state, onLeave }: Props) {
               )}
               {teamTuning.missSelfDamage > 0 && (
                 <div className="miss-note">
-                  💥 ミスタイプすると 自分のHPが -{teamTuning.missSelfDamage}
+                  <PixelIcon name="burst" /> ミスタイプすると 自分のHPが -{teamTuning.missSelfDamage}
                 </div>
               )}
             </div>
@@ -185,7 +186,7 @@ export function Lobby({ session, state, onLeave }: Props) {
             disabled={!everyoneReady}
             onClick={() => fireAndForget("ゲーム開始", brain.startGame(state))}
           >
-            {survival ? "☠️ うぉーろーど 開始！" : "⚔️ ぼうけんに出発！"}
+            <Px>{survival ? "☠️ うぉーろーど 開始！" : "⚔️ ぼうけんに出発！"}</Px>
             {!everyoneReady && <span className="btn-note">（全員のじゅんびOK待ち）</span>}
           </button>
         )}

@@ -1492,9 +1492,9 @@ body {
   border-color: var(--gold);
   opacity: 0.95;
 }
-.reel-chip.weak::after {
-  content: "⚡";
-  font-size: 10px;
+.reel-chip.weak .pixel-icon + .pixel-icon {
+  width: 10px;
+  height: 10px;
   margin-left: 1px;
 }
 .reel-chip.defense {
@@ -1691,4 +1691,15 @@ body {
 }
 .legal-body a {
   color: var(--gold);
+}
+
+/* 自作8bitアイコン（src/ui/PixelIcon.tsx）。文中では文字サイズに追従 */
+.pixel-icon {
+  display: inline-block;
+  vertical-align: -0.25em;
+}
+/* メニューボタンでは大きめに。ボタンの高さを変えないよう上下は負マージンで吸収 */
+.menu-buttons .btn .pixel-icon {
+  vertical-align: middle;
+  margin: -8px 10px -6px 0;
 }

@@ -3,6 +3,7 @@ import type { JoinProfile } from "../game/room";
 import { SURVIVAL, type TeamDifficulty } from "../game/data";
 import type { GameMode } from "../game/types";
 import { alienFor, enAsset } from "../assets";
+import { PixelIcon } from "../ui/PixelIcon";
 
 interface Props {
   error: string;
@@ -67,29 +68,29 @@ export function Title(p: Props) {
       {mode === "menu" && (
         <div className="menu-buttons">
           <button className="btn big tutorial-btn" onClick={p.onTutorial}>
-            🎓 あそびかた
+            <PixelIcon name="book" size={32} /> あそびかた
           </button>
           <button className="btn big" onClick={() => setMode("create")}>
-            🏰 へやをつくる
+            <PixelIcon name="castle" size={32} /> ぼうけんをはじめる
           </button>
           <button className="btn big" onClick={() => setMode("join")}>
-            🤝 あいことばで参加
+            <PixelIcon name="key" size={32} /> あいことばでくわわる
           </button>
           <button
             className="btn big"
             disabled={busy}
             onClick={() => go(() => p.onSolo(profile(), diff, "story"))}
           >
-            🗡️ ひとりで特訓
+            <PixelIcon name="sword" size={32} /> ひとりでしゅぎょう
           </button>
           <button className="btn big warlord-btn" onClick={() => setMode("warlord")}>
-            ☠️ うぉーろーど
+            <PixelIcon name="skull" size={32} /> うぉーろーど
           </button>
           <button className="btn" onClick={() => setMode("spectate")}>
-            📺 観戦する
+            <PixelIcon name="eye" size={24} /> たたかいをみる
           </button>
           <button className="btn" onClick={p.onRanking}>
-            🏆 ランキング
+            <PixelIcon name="trophy" size={24} /> でんせつのきろく
           </button>
         </div>
       )}
@@ -97,7 +98,7 @@ export function Title(p: Props) {
       {mode === "warlord" && (
         <div className="menu-buttons">
           <div className="mode-desc">
-            ☠️ 終わりなき戦い。たおした数をきそう。
+            <PixelIcon name="skull" /> 終わりなき戦い。たおした数をきそう。
             <br />
             {SURVIVAL.bossEvery}ウェーブごとにボス。全滅したら終了。
           </div>
@@ -108,14 +109,14 @@ export function Title(p: Props) {
               setMode("create");
             }}
           >
-            🏰 へやをつくる
+            <PixelIcon name="castle" size={32} /> みんなでいどむ
           </button>
           <button
             className="btn big"
             disabled={busy}
             onClick={() => go(() => p.onSolo(profile(), diff, "survival"))}
           >
-            🗡️ ひとりで挑む
+            <PixelIcon name="sword" size={32} /> ひとりでいどむ
           </button>
           <button className="btn ghost" onClick={() => setMode("menu")}>
             もどる
@@ -126,7 +127,7 @@ export function Title(p: Props) {
       {mode !== "menu" && mode !== "warlord" && (
         <div className="setup-panel">
           {gameMode === "survival" && (
-            <div className="mode-banner">☠️ うぉーろーど（サバイバル）</div>
+            <div className="mode-banner"><PixelIcon name="skull" /> うぉーろーど（サバイバル）</div>
           )}
           {mode !== "spectate" && (
             <>
@@ -175,9 +176,9 @@ export function Title(p: Props) {
                 })
               }
             >
-              {mode === "create" && "へやをつくる！"}
-              {mode === "join" && "参加する！"}
-              {mode === "spectate" && "観戦する"}
+              {mode === "create" && "ぼうけんをはじめる！"}
+              {mode === "join" && "くわわる！"}
+              {mode === "spectate" && "たたかいをみる"}
             </button>
           </div>
         </div>

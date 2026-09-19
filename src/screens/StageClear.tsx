@@ -6,6 +6,7 @@ import { enAsset } from "../assets";
 import { fireAndForget } from "../net/store";
 import { HostBrain } from "../game/host";
 import { allPlayers } from "../game/room";
+import { PixelIcon, Px } from "../ui/PixelIcon";
 
 interface Props {
   session: Session;
@@ -31,9 +32,9 @@ export function StageClear({ session, state }: Props) {
 
   return (
     <div className="screen center stageclear-screen" style={{ background: stage.bg }}>
-      <h1 className="clear-title">🎉 STAGE CLEAR!</h1>
+      <h1 className="clear-title"><PixelIcon name="party" /> STAGE CLEAR!</h1>
       <div className="clear-stage-name">
-        {stage.icon} {stage.name} をクリアした！
+        <Px>{stage.icon}</Px> {stage.name} をクリアした！
       </div>
       {(() => {
         const lastWave = stage.waves[stage.waves.length - 1];
@@ -47,7 +48,7 @@ export function StageClear({ session, state }: Props) {
       })()}
 
       <div className="drop-panel">
-        <h3>{canPick ? "🎁 そうびを えらぼう" : "🎁 そうびを手に入れた！"}</h3>
+        <h3><Px>{canPick ? "🎁 そうびを えらぼう" : "🎁 そうびを手に入れた！"}</Px></h3>
         {canPick && me && (
           <div className="equip-grid">
             {EQUIPS.map((eq) => {
@@ -60,9 +61,9 @@ export function StageClear({ session, state }: Props) {
                   onClick={() => fireAndForget("装備えらび", room.setEquip(eq.id))}
                 >
                   {isRec && (
-                    <span className="equip-rec">⭐おすすめ（{rec!.reason}）</span>
+                    <span className="equip-rec"><PixelIcon name="star" />おすすめ（{rec!.reason}）</span>
                   )}
-                  <span className="equip-icon">{eq.icon}</span>
+                  <span className="equip-icon"><Px>{eq.icon}</Px></span>
                   <span className="equip-name">{eq.label}</span>
                   <span className="equip-desc">{eq.desc}</span>
                 </button>
@@ -76,10 +77,10 @@ export function StageClear({ session, state }: Props) {
             return (
               <div key={pid} className={`drop-row ${pid === room.myId ? "me" : ""}`}>
                 <span>
-                  {roleDef(p.role).icon} {p.name}
+                  <Px>{roleDef(p.role).icon}</Px> {p.name}
                 </span>
                 <span className="drop-item">
-                  {eq ? `${eq.icon} ${eq.label}（${eq.desc}）` : "─"}
+                  <Px>{eq ? `${eq.icon} ${eq.label}（${eq.desc}）` : "─"}</Px>
                 </span>
               </div>
             );
@@ -89,7 +90,7 @@ export function StageClear({ session, state }: Props) {
 
       {nextStage && (
         <div className="next-stage-note">
-          つぎは {nextStage.icon} <b>{nextStage.name}</b> …
+          つぎは <Px>{nextStage.icon}</Px> <b>{nextStage.name}</b> …
         </div>
       )}
 

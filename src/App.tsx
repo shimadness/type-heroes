@@ -25,7 +25,7 @@ export interface Session {
 function friendlyError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (/permission.?denied/i.test(msg)) {
-    return "サーバー設定がまだ準備中みたい…（RTDBルールにtypingブロックを追加してね。ひとりで特訓はあそべるよ）";
+    return "サーバー設定がまだ準備中みたい…（RTDBルールにtypingブロックを追加してね。ひとりでしゅぎょうはあそべるよ）";
   }
   return msg;
 }
@@ -62,7 +62,7 @@ export default function App() {
         // 「使用中」＝いまも遊んでいる人がいる部屋だけ。
         // 全滅・クリア後に全員がタイトルへ戻った部屋は同じあいことばで作り直せる
         if (await Room.hasLivePlayers(store, code)) {
-          throw new Error("そのあいことばは使用中！べつのあいことばにするか「あいことばで参加」してね");
+          throw new Error("そのあいことばは使用中！べつのあいことばにするか「あいことばでくわわる」してね");
         }
         const room = await Room.create(store, code, profile, teamDiff, mode);
         trackPlayStart("create");

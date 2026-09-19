@@ -39,6 +39,7 @@ import { fireAndForget } from "../net/store";
 import { alienFor, enAsset } from "../assets";
 import { TouchKeyboard, isTouchDevice } from "../ui/TouchKeyboard";
 import { WordReel, nextReelId, type ReelItem } from "../ui/WordReel";
+import { PixelIcon, Px } from "../ui/PixelIcon";
 
 const TOUCH = isTouchDevice();
 
@@ -686,13 +687,13 @@ export function Battle({ session, state, onLeave }: Props) {
         <div className="stage-label">
           {survival ? (
             <>
-              ☠️ WAVE {state.meta.wave + 1}{" "}
+              <PixelIcon name="skull" /> WAVE {state.meta.wave + 1}{" "}
               <span className="wave-label kills-label">撃破 {state.meta.kills ?? 0}</span>{" "}
-              <span className="wave-label">{stage.icon} {stage.name}</span>
+              <span className="wave-label"><Px>{stage.icon}</Px> {stage.name}</span>
             </>
           ) : (
             <>
-              {stage.icon} {stage.name}{" "}
+              <Px>{stage.icon}</Px> {stage.name}{" "}
               <span className="wave-label">
                 WAVE {state.meta.wave + 1}/{stage.waves.length}
               </span>
@@ -701,7 +702,7 @@ export function Battle({ session, state, onLeave }: Props) {
         </div>
         {boss && (
           <div className="rage-wrap" title="ボスのいかりゲージ。満タンで全体攻撃！">
-            <span className="rage-icon">💢</span>
+            <span className="rage-icon"><PixelIcon name="anger" /></span>
             <div className="bar rage-bar">
               <div
                 className="bar-fill rage-fill"
@@ -722,7 +723,7 @@ export function Battle({ session, state, onLeave }: Props) {
               fireAndForget("ユニゾン発動", room.triggerUnison(w.d, w.k));
             }}
           >
-            ✨ユニゾン
+            <PixelIcon name="sparkle" />ユニゾン
           </button>
         </div>
         {!isSpectator && (
@@ -739,7 +740,7 @@ export function Battle({ session, state, onLeave }: Props) {
               }
             }}
           >
-            🏳️ あきらめる
+            <PixelIcon name="flag" /> あきらめる
           </button>
         )}
       </div>
@@ -748,16 +749,16 @@ export function Battle({ session, state, onLeave }: Props) {
       <div className="banner-feed">
         {chainActive && (
           <div className="banner chain-banner">
-            🔗 {chain!.count} CHAIN! 火力+
+            <PixelIcon name="chain" /> {chain!.count} CHAIN! 火力+
             {Math.round(Math.min(TUNING.chainBonusMax, (chain!.count - 1) * TUNING.chainBonusPer) * 100)}%
           </div>
         )}
         {buffActive && (
-          <div className="banner buff-banner">🎺 おうえん中！ チーム火力+20%</div>
+          <div className="banner buff-banner"><PixelIcon name="trumpet" /> おうえん中！ チーム火力+20%</div>
         )}
         {infoEvents.map((ev, i) => (
           <div key={ev.at + i} className="banner info-banner">
-            {ev.text}
+            <Px>{ev.text}</Px>
           </div>
         ))}
       </div>
@@ -798,7 +799,7 @@ export function Battle({ session, state, onLeave }: Props) {
                 style={kind.tint ? ({ "--tint": kind.tint } as CSSProperties) : undefined}
               />
               <div className="enemy-name">
-                {kind.boss && "👑"}
+                {kind.boss && <PixelIcon name="crown" />}
                 {kind.name}
               </div>
               <div className="bar enemy-hp-bar">
@@ -809,13 +810,13 @@ export function Battle({ session, state, onLeave }: Props) {
               </div>
               {genre && e.alive && (
                 <div className="weakness-chip">
-                  弱点:{genre.icon}
+                  弱点:<Px>{genre.icon}</Px>
                   {genre.label} ×{kind.boss ? TUNING.bossWeaknessMult : TUNING.weaknessMult}
                 </div>
               )}
               {tele && (
                 <div className="telegraph-warn">
-                  ⚠️こうげき! {Math.max(0, Math.ceil((teleAt - now) / 1000))}
+                  <PixelIcon name="warning" />こうげき! {Math.max(0, Math.ceil((teleAt - now) / 1000))}
                 </div>
               )}
             </button>
@@ -826,7 +827,7 @@ export function Battle({ session, state, onLeave }: Props) {
             .filter((f) => f.area === "enemy")
             .map((f) => (
               <div key={f.id} className={`float ${f.cls}`}>
-                {f.text}
+                <Px>{f.text}</Px>
               </div>
             ))}
         </div>
@@ -864,15 +865,15 @@ export function Battle({ session, state, onLeave }: Props) {
                   alt=""
                   draggable={false}
                 />
-                <span className="player-role">{rd.icon}</span>
+                <span className="player-role"><Px>{rd.icon}</Px></span>
                 <span className="player-name">{pl.name}</span>
-                {eq && <span className="player-equip" title={eq.desc}>{eq.icon}</span>}
+                {eq && <span className="player-equip" title={eq.desc}><Px>{eq.icon}</Px></span>}
                 {rd.fury && (pid === room.myId ? fury : pl.fury ?? 0) > 0 && (
                   <span className="player-fury" title="いかり（ノーミス連続）">
-                    🔥×{furyMult(pid === room.myId ? fury : pl.fury ?? 0)}
+                    <PixelIcon name="fire" />×{furyMult(pid === room.myId ? fury : pl.fury ?? 0)}
                   </span>
                 )}
-                {unison?.active && unison.done?.[pid] && <span title="ユニゾン入力完了">✅</span>}
+                {unison?.active && unison.done?.[pid] && <span title="ユニゾン入力完了"><PixelIcon name="check" /></span>}
               </div>
               <div className="bar player-hp-bar">
                 <div
@@ -881,7 +882,7 @@ export function Battle({ session, state, onLeave }: Props) {
                 />
               </div>
               <div className="player-hp-num">
-                {pl.alive ? `${pl.hp}/${pl.maxHp}` : "😵 きぜつ中"}
+                <Px>{pl.alive ? `${pl.hp}/${pl.maxHp}` : "😵 きぜつ中"}</Px>
               </div>
             </div>
           );
@@ -891,7 +892,7 @@ export function Battle({ session, state, onLeave }: Props) {
             .filter((f) => f.area === "self")
             .map((f) => (
               <div key={f.id} className={`float ${f.cls}`}>
-                {f.text}
+                <Px>{f.text}</Px>
               </div>
             ))}
         </div>
@@ -902,13 +903,13 @@ export function Battle({ session, state, onLeave }: Props) {
         <div className={`typing-panel ${missFlash ? "miss-flash" : ""}`}>
           {!me.alive ? (
             <div className="downed-overlay">
-              <div className="downed-msg">😵 きぜつしてしまった…</div>
+              <div className="downed-msg"><PixelIcon name="dizzy" /> きぜつしてしまった…</div>
               <div className="downed-sub">なかまの「そせいワード」を待とう！</div>
             </div>
           ) : unisonTyping && unisonWordRef.current ? (
             <div className="unison-panel">
               <div className="unison-title">
-                ✨ ユニゾンアタック！ 全員で打ちきれ！（のこり
+                <PixelIcon name="sparkle" /> ユニゾンアタック！ 全員で打ちきれ！（のこり
                 {Math.max(0, Math.ceil((unison!.deadline - now) / 1000))}秒）
               </div>
               <div className="active-card unison-card">
@@ -917,7 +918,7 @@ export function Battle({ session, state, onLeave }: Props) {
             </div>
           ) : unison?.active && unison.done?.[room.myId] ? (
             <div className="unison-panel">
-              <div className="unison-title">✅ 入力かんりょう！なかまを待て…</div>
+              <div className="unison-title"><PixelIcon name="check" /> 入力かんりょう！なかまを待て…</div>
             </div>
           ) : (
             <>
@@ -926,7 +927,7 @@ export function Battle({ session, state, onLeave }: Props) {
                   className={`mode-btn attack ${mode === "attack" ? "sel" : ""}`}
                   onClick={() => setMode("attack")}
                 >
-                  ⚔️ こうげき
+                  <PixelIcon name="swords" /> こうげき
                 </button>
                 {myRole.noHeal ? (
                   <div
@@ -935,7 +936,7 @@ export function Battle({ session, state, onLeave }: Props) {
                   >
                     {Array.from({ length: BERSERK.maxStacks }, (_, i) => (
                       <span key={i} className={`fury-pip ${i < fury ? "on" : ""}`}>
-                        🔥
+                        <PixelIcon name="fire" />
                       </span>
                     ))}
                     <span className="fury-mult">×{furyMult(fury)}</span>
@@ -945,7 +946,7 @@ export function Battle({ session, state, onLeave }: Props) {
                     className={`mode-btn heal ${mode === "heal" ? "sel" : ""}`}
                     onClick={() => setMode("heal")}
                   >
-                    💚 かいふく
+                    <PixelIcon name="heart" /> かいふく
                   </button>
                 )}
                 <span className="mode-hint">
@@ -999,16 +1000,16 @@ export function Battle({ session, state, onLeave }: Props) {
               />
               <div className="stat-row">
                 <span className={`combo ${combo >= 10 ? "hot" : ""}`}>
-                  🔥コンボ {combo}
+                  <PixelIcon name="fire" />コンボ {combo}
                 </span>
-                <span>⌨️ {kpm} 打/分</span>
-                <span>🎯 せいかく {acc}%</span>
+                <span><PixelIcon name="keyboard" /> {kpm} 打/分</span>
+                <span><PixelIcon name="target" /> せいかく {acc}%</span>
                 <span className="diff-note" style={{ color: tuning.color }}>
                   てき: {tuning.label}
                 </span>
                 {tuning.missSelfDamage > 0 && (
                   <span className="miss-note" title="ミスタイプすると自分のHPが減る">
-                    💥ミス -{tuning.missSelfDamage}
+                    <PixelIcon name="burst" />ミス -{tuning.missSelfDamage}
                   </span>
                 )}
               </div>
@@ -1027,7 +1028,7 @@ export function Battle({ session, state, onLeave }: Props) {
 
       {isSpectator && (
         <div className="spectate-bar">
-          📺 観戦中 — {room.code}
+          <PixelIcon name="eye" /> 観戦中 — {room.code}
           <button className="btn ghost" onClick={onLeave}>
             観戦をやめる
           </button>
@@ -1037,9 +1038,9 @@ export function Battle({ session, state, onLeave }: Props) {
       {/* ---- インクギミック ---- */}
       {inkMode && (
         <div className="ink-overlay">
-          <div className="ink-blob b1">🖤</div>
-          <div className="ink-blob b2">🖤</div>
-          <div className="ink-blob b3">🖤</div>
+          <div className="ink-blob b1"><PixelIcon name="heartBlack" /></div>
+          <div className="ink-blob b2"><PixelIcon name="heartBlack" /></div>
+          <div className="ink-blob b3"><PixelIcon name="heartBlack" /></div>
         </div>
       )}
     </div>

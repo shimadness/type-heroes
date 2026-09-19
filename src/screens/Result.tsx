@@ -6,6 +6,7 @@ import { HostBrain } from "../game/host";
 import { allPlayers, isSurvival } from "../game/room";
 import { alienFor, enAsset } from "../assets";
 import { fireAndForget } from "../net/store";
+import { PixelIcon, Px } from "../ui/PixelIcon";
 
 interface Props {
   session: Session;
@@ -98,11 +99,11 @@ export function Result({ session, state, onLeave }: Props) {
       }`}
     >
       <h1 className="result-title">
-        {survival
+        <Px>{survival
           ? "☠️ うぉーろーど しゅうりょう"
           : cleared
             ? "🏆 ぜんステージクリア！！"
-            : "💀 ぜんめつ…"}
+            : "💀 ぜんめつ…"}</Px>
       </h1>
       {survival && (
         <div className="result-time survival-score">
@@ -166,12 +167,12 @@ export function Result({ session, state, onLeave }: Props) {
                       alt=""
                       draggable={false}
                     />
-                    {roleDef(p.role).icon} {p.name}
+                    <Px>{roleDef(p.role).icon}</Px> {p.name}
                   </td>
                   <td className="title-cell">
                     {titles[pid]?.map((tt, i) => (
                       <div key={i}>
-                        {tt.icon}
+                        <Px>{tt.icon}</Px>
                         {tt.label}
                       </div>
                     ))}
@@ -195,7 +196,7 @@ export function Result({ session, state, onLeave }: Props) {
         </button>
         {isHost && (
           <button className="btn primary" onClick={() => fireAndForget("ロビーに戻る", brain.backToLobby(state))}>
-            🏕️ ロビーにもどって もういちど！
+            <PixelIcon name="tent" /> ロビーにもどって もういちど！
           </button>
         )}
         {!isHost && !room.spectator && (

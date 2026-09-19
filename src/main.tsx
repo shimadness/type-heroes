@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./styles.css";
 import { initAnalytics } from "./analytics";
+import { PixelIcon } from "./ui/PixelIcon";
 
 initAnalytics();
 
@@ -23,7 +24,7 @@ class ErrorBoundary extends React.Component<
     if (this.state.error) {
       return (
         <div className="screen center">
-          <h1>💥 エラーが発生しました</h1>
+          <h1><PixelIcon name="burst" /> エラーが発生しました</h1>
           <div className="error-box" style={{ maxWidth: 640, wordBreak: "break-all" }}>
             {String(this.state.error)}
           </div>

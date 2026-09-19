@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Store } from "./net/store";
 import { LocalStore } from "./net/store";
 import { Room, sanitizeRoomCode } from "./game/room";
@@ -14,6 +14,7 @@ import { Result } from "./screens/Result";
 import { Ranking } from "./screens/Ranking";
 import { Tutorial } from "./screens/Tutorial";
 import { Legal } from "./screens/Legal";
+import { trackPlayStart, trackScreen } from "./analytics";
 
 export interface Session {
   store: Store;
@@ -45,6 +46,7 @@ export default function App() {
         (window as unknown as { __thStore?: Store }).__thStore = store;
       }
       const room = await Room.create(store, "solo", profile, teamDiff, mode);
+      trackPlayStart("solo");
       setSession({ store, room, isLocal: true });
     },
     []
@@ -63,6 +65,7 @@ export default function App() {
           throw new Error("そのあいことばは使用中！べつのあいことばにするか「あいことばで参加」してね");
         }
         const room = await Room.create(store, code, profile, teamDiff, mode);
+        trackPlayStart("create");
         setSession({ store, room, isLocal: false });
         setError("");
       } catch (e) {
@@ -78,6 +81,7 @@ export default function App() {
       const store = new FirebaseStore();
       const code = sanitizeRoomCode(pw);
       const room = await Room.join(store, code, profile);
+      trackPlayStart("join");
       setSession({ store, room, isLocal: false });
       setError("");
     } catch (e) {
@@ -91,6 +95,7 @@ export default function App() {
       const store = new FirebaseStore();
       const code = sanitizeRoomCode(pw);
       const room = await Room.spectate(store, code);
+      trackPlayStart("spectate");
       setSession({ store, room, isLocal: false });
       setError("");
     } catch (e) {
@@ -102,6 +107,20 @@ export default function App() {
     session?.room.leave();
     setSession(null);
   }, [session]);
+
+  // 画面名（URL が変わらないSPAなので、切り替わるたびに自前で計測する）
+  const screen = showTutorial
+    ? "tutorial"
+    : showRanking
+      ? "ranking"
+      : showLegal
+        ? "legal"
+        : !session
+          ? "title"
+          : (state?.meta?.status ?? "loading");
+  useEffect(() => {
+    if (screen !== "loading") trackScreen(screen);
+  }, [screen]);
 
   if (showTutorial) {
     return <Tutorial onExit={() => setShowTutorial(false)} />;

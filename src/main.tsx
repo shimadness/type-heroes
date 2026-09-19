@@ -2,6 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./styles.css";
+import { initAnalytics } from "./analytics";
+
+initAnalytics();
 
 // 万一どこかの画面が例外で落ちても、真っ黒画面ではなく
 // エラー内容と「タイトルにもどる」を出す（原因調査もできるように）

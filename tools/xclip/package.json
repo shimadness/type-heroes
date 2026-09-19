@@ -1,0 +1,12 @@
+{
+  "name": "type-heroes-xclip",
+  "private": true,
+  "type": "module",
+  "description": "X拡散用の10秒プレイ動画クリップを自動生成する（ゲーム本体の依存には触れない）",
+  "scripts": {
+    "clip": "node clip.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  }
+}

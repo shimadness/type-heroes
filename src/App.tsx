@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Store } from "./net/store";
 import { LocalStore } from "./net/store";
-import { Room, sanitizeRoomCode } from "./game/room";
+import { Room, allPlayers, sanitizeRoomCode } from "./game/room";
 import type { JoinProfile } from "./game/room";
 import type { TeamDifficulty } from "./game/data";
 import type { GameMode } from "./game/types";
@@ -14,7 +14,7 @@ import { Result } from "./screens/Result";
 import { Ranking } from "./screens/Ranking";
 import { Tutorial } from "./screens/Tutorial";
 import { Legal } from "./screens/Legal";
-import { trackPlayStart, trackScreen } from "./analytics";
+import { trackGameEnd, trackPlayStart, trackScreen } from "./analytics";
 
 export interface Session {
   store: Store;
@@ -120,6 +120,25 @@ export default function App() {
           : (state?.meta?.status ?? "loading");
   useEffect(() => {
     if (screen !== "loading") trackScreen(screen);
+  }, [screen]);
+
+  // 決着の計測。結果画面に入った瞬間に1回だけ（state は依存に入れない＝入った時点の値を送る）
+  useEffect(() => {
+    if (screen !== "clear" && screen !== "gameover") return;
+    if (!session || session.room.spectator || !state?.meta) return;
+    const m = state.meta;
+    trackGameEnd({
+      result: screen,
+      game_mode: m.mode ?? "story",
+      team_diff: m.diff,
+      players: allPlayers(state).length,
+      solo: session.isLocal,
+      stage: m.stageIdx + 1,
+      wave: m.wave + 1,
+      kills: m.kills ?? 0,
+      duration_sec: Math.max(0, Math.round(((m.clearedAt || Date.now()) - m.startedAt) / 1000)),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
   if (showTutorial) {

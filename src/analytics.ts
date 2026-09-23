@@ -43,3 +43,29 @@ export function trackScreen(screen: string): void {
 export function trackPlayStart(mode: "solo" | "create" | "join" | "spectate"): void {
   window.gtag?.("event", "play_start", { mode });
 }
+
+/**
+ * 1ゲームの決着。結果画面に入った瞬間に各プレイヤーの端末から1回ずつ送る（観戦者は送らない）。
+ * result: clear=全ステージクリア / gameover=全滅（うぉーろーどは必ず gameover で終わる）
+ */
+export function trackGameEnd(p: {
+  result: "clear" | "gameover";
+  game_mode: "story" | "survival";
+  team_diff: string;
+  players: number;
+  solo: boolean;
+  stage: number; // 到達ステージ（1始まり）
+  wave: number; // 到達ウェーブ（1始まり）
+  kills: number;
+  duration_sec: number;
+}): void {
+  window.gtag?.("event", "game_end", p);
+}
+
+/**
+ * チュートリアルの進み具合。step に入った瞬間に送る（done = 最後までやりきった）。
+ * どのステップでやめたかは「そのステップには入ったが次に入っていない人数」で分かる。
+ */
+export function trackTutorialStep(step: string, index: number): void {
+  window.gtag?.("event", "tutorial_step", { step, step_index: index });
+}

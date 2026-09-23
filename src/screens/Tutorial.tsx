@@ -28,6 +28,7 @@ import { sfx } from "../sfx";
 import { TouchKeyboard, isTouchDevice } from "../ui/TouchKeyboard";
 import { WordReel, nextReelId, type ReelItem } from "../ui/WordReel";
 import { PixelIcon, Px } from "../ui/PixelIcon";
+import { trackTutorialStep } from "../analytics";
 
 const TOUCH = isTouchDevice();
 
@@ -166,6 +167,12 @@ export function Tutorial({ onExit }: Props) {
   useEffect(() => {
     setup(step);
   }, [step, setup]);
+
+  // どのステップで離脱したかの計測（done は STEPS に無いので末尾の番号を振る）
+  useEffect(() => {
+    const i = STEPS.findIndex((s) => s.id === step);
+    trackTutorialStep(step, (i >= 0 ? i : STEPS.length) + 1);
+  }, [step]);
 
   const advance = useCallback(
     (delay = 1100) => {

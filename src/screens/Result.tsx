@@ -1,12 +1,14 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, type CSSProperties } from "react";
 import type { Session } from "../App";
 import type { PlayerState, RoomState } from "../game/types";
-import { ENEMY_KINDS, STAGES, roleDef } from "../game/data";
+import { ENEMY_KINDS, GRADE, STAGES, roleDef } from "../game/data";
+import { makeReport, updateBest, type BestKey } from "../game/grade";
 import { HostBrain } from "../game/host";
 import { allPlayers, isSurvival } from "../game/room";
 import { alienFor, enAsset } from "../assets";
 import { fireAndForget } from "../net/store";
 import { PixelIcon, Px } from "../ui/PixelIcon";
+import { sfx } from "../sfx";
 
 interface Props {
   session: Session;
@@ -74,6 +76,24 @@ export function Result({ session, state, onLeave }: Props) {
   const cleared = state.meta.status === "clear";
   const survival = isSurvival(state);
   const kills = state.meta.kills ?? 0;
+  // ---- 自分の成績ランクと自己ベスト（画面に入った時点の値で1回だけ確定する）----
+  const me = room.spectator ? undefined : state.players?.[room.myId];
+  const mine = useMemo(() => {
+    if (!me) return null;
+    const report = makeReport(me.stats, state.meta.clearedAt || Date.now());
+    return { report, ...updateBest(report) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (cleared) sfx.victory();
+    else sfx.gameover();
+    if (!mine) return;
+    const tm = setTimeout(() => sfx.stamp(mine.report.score >= GRADE.ranks[1].min), 1500);
+    return () => clearTimeout(tm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const newMark = (k: BestKey) =>
+    mine?.beaten.includes(k) ? <span className="new-best">NEW!</span> : null;
   const players = allPlayers(state).sort(
     (a, b) => (b[1].stats?.damage ?? 0) - (a[1].stats?.damage ?? 0)
   );
@@ -137,6 +157,51 @@ export function Result({ session, state, onLeave }: Props) {
       )}
       {!survival && !cleared && (
         <div className="result-time">もういちど ちからを合わせて挑もう！</div>
+      )}
+
+      {mine && (
+        <div className="grade-panel" style={{ "--grade-color": mine.report.rank.color } as CSSProperties}>
+          <div className="grade-stamp">{mine.report.rank.id}</div>
+          <div className="grade-body">
+            <div className="grade-stats">
+              <span className="grade-score">
+                <b>{mine.report.score}</b>てん{newMark("score")}
+              </span>
+              <span>
+                <PixelIcon name="keyboard" /> {mine.report.kpm} 打/分{newMark("kpm")}
+              </span>
+              <span>
+                <PixelIcon name="target" /> {mine.report.acc}%{newMark("acc")}
+              </span>
+              <span>
+                <PixelIcon name="fire" /> {mine.report.combo} コンボ{newMark("combo")}
+              </span>
+            </div>
+            {/* つぎのランクまでの距離を棒で見せる（「あとちょっと」が一目でわかるように） */}
+            <div className="grade-track">
+              <div className="bar grade-bar">
+                <div className="bar-fill grade-fill" style={{ width: `${mine.report.score}%` }} />
+                {GRADE.ranks
+                  .filter((r) => r.min > 0)
+                  .map((r) => (
+                    <span
+                      key={r.id}
+                      className={`grade-tick ${mine.report.score >= r.min ? "reached" : ""}`}
+                      style={{ left: `${r.min}%`, "--grade-color": r.color } as CSSProperties}
+                    >
+                      {r.id}
+                    </span>
+                  ))}
+              </div>
+              <div className="grade-next">
+                {mine.report.next
+                  ? `ランク${mine.report.next.id} まで あと ${mine.report.next.need} てん`
+                  : "さいこうランク！"}
+                {mine.prev && <span className="grade-prev">じこベスト {Math.max(mine.prev.score, mine.report.score)} てん</span>}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="result-table-wrap">

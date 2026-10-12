@@ -10,12 +10,13 @@
 //   ベタ書きするとバランス調整のたびにチュートリアルだけ嘘になる。
 //   ステップの流れ自体を変える改修をしたら STEPS の並びも見直す。
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   BERSERK,
   DIFF_TUNING,
   ENEMY_KINDS,
   FURY_MAX_MULT,
+  GRADE,
   SURVIVAL,
   TEAM_DIFFS,
   TUNING,
@@ -29,6 +30,15 @@ import { TouchKeyboard, isTouchDevice } from "../ui/TouchKeyboard";
 import { WordReel, nextReelId, type ReelItem } from "../ui/WordReel";
 import { PixelIcon, Px } from "../ui/PixelIcon";
 import { trackTutorialStep } from "../analytics";
+import { bgm } from "../bgm";
+import { centerOf, fx, lunge } from "../ui/fx";
+import { guardReadyFeel, impactFeel, strikeFeel, unisonFeel } from "../ui/feel";
+import { SoundToggle } from "../ui/SoundToggle";
+
+// 演出の発射元・着弾先（本編と同じく DOM から位置を拾う）
+const enemySpriteEl = () => document.querySelector(".tutorial-screen .enemy-sprite");
+const cardOf = (who: "me" | "ally") => document.querySelector(`.tutorial-screen .player-card[data-pid="${who}"]`);
+const wordCardEl = () => document.querySelector(".tutorial-screen .reel-card");
 
 const TOUCH = isTouchDevice();
 
@@ -83,11 +93,22 @@ export function Tutorial({ onExit }: Props) {
   const allyAliveRef = useRef(true);
   const modeRef = useRef<"attack" | "heal">("attack");
   const gaugeRef = useRef(0);
-  const telegraphRef = useRef<{ until: number; dmg: number } | null>(null);
+  const telegraphRef = useRef<{ at: number; until: number; dmg: number } | null>(null);
   const defendedRef = useRef(false);
   const flashRef = useRef<{ text: string; cls: string } | null>(null);
   const okRef = useRef(false); // ステップ達成後の小休止フラグ
   const hitRef = useRef(0);
+  const comboRef = useRef(0);
+
+  // 本編と同じ BGM を流す（しゅうりょう画面とやめたときは止める）
+  useEffect(() => {
+    if (step === "done") bgm.stop();
+    else bgm.play("battle");
+  }, [step]);
+  useEffect(() => () => {
+    bgm.stop();
+    fx.setAims([]);
+  }, []);
 
   const enemyKind =
     step === "unison" ? ENEMY_KINDS.debtgolem : ENEMY_KINDS.minibug;
@@ -109,6 +130,7 @@ export function Tutorial({ onExit }: Props) {
   const setup = useCallback(
     (s: StepId) => {
       okRef.current = false;
+      fx.setAims([]);
       telegraphRef.current = null;
       defendedRef.current = false;
       modeRef.current = "attack";
@@ -133,11 +155,14 @@ export function Tutorial({ onExit }: Props) {
       } else if (s === "defense") {
         enemyMaxRef.current = 120;
         enemyHpRef.current = 90;
-        telegraphRef.current = { until: Date.now() + 7000, dmg: 24 };
+        const at = Date.now();
+        telegraphRef.current = { at, until: at + 7000, dmg: 24 };
         cardsRef.current = [
           { id: cid(), kind: "defense", word: new TypingWord("ガード", "がーど") },
         ];
-        sfx.warn();
+        sfx.charge();
+        // 本編と同じ照準線（敵 → きみ）
+        fx.setAims([{ from: () => centerOf(enemySpriteEl()), to: () => [centerOf(cardOf("me"))], at, resolveAt: at + 7000 }]);
       } else if (s === "heal") {
         myHpRef.current = 38;
         cardsRef.current = [
@@ -195,9 +220,12 @@ export function Tutorial({ onExit }: Props) {
       if (!t) return;
       if (Date.now() >= t.until) {
         telegraphRef.current = null;
+        fx.setAims([]);
         const dmg = defendedRef.current ? Math.round(t.dmg / 2) : t.dmg;
         myHpRef.current = Math.max(1, myHpRef.current - dmg);
-        sfx.hurt();
+        lunge(enemySpriteEl(), centerOf(cardOf("me")));
+        sfx.enemyAttack();
+        impactFeel(cardOf("me"), defendedRef.current);
         float(
           defendedRef.current ? `🛡️-${dmg} はんげん！` : `-${dmg}`,
           defendedRef.current ? "float-guard" : "float-hurt"
@@ -218,7 +246,7 @@ export function Tutorial({ onExit }: Props) {
 
       if (card.kind === "defense") {
         defendedRef.current = true;
-        sfx.wordDone();
+        guardReadyFeel(cardOf("me"));
         float("ガードOK!", "float-guard");
         rerender();
         return;
@@ -227,6 +255,7 @@ export function Tutorial({ onExit }: Props) {
         allyAliveRef.current = true;
         allyHpRef.current = Math.round(MAX_HP * TUNING.reviveHpRatio);
         sfx.revive();
+        fx.pillar(centerOf(cardOf("ally")));
         float("⛑️ふっかつ！", "float-heal");
         advance(1300);
         return;
@@ -240,7 +269,7 @@ export function Tutorial({ onExit }: Props) {
         const heal = Math.round(MAX_HP * TUNING.unisonHealRatio);
         myHpRef.current = Math.min(MAX_HP, myHpRef.current + heal);
         allyHpRef.current = Math.min(MAX_HP, allyHpRef.current + heal);
-        sfx.unison();
+        unisonFeel([cardOf("me"), cardOf("ally")], [enemySpriteEl()]);
         float(`✨ユニゾン ${dmg}! みんな+${heal}`, "float-crit");
         advance(1600);
         return;
@@ -251,6 +280,7 @@ export function Tutorial({ onExit }: Props) {
         const amount = Math.round(kana * TUNING.healPerKana * (crit ? 1.2 : 1));
         myHpRef.current = Math.min(MAX_HP, myHpRef.current + amount);
         sfx.heal();
+        fx.sparks(centerOf(cardOf("me")), "#8be08b", 14, 0.28);
         float(`+${amount}`, "float-heal");
         advance();
         return;
@@ -271,7 +301,7 @@ export function Tutorial({ onExit }: Props) {
       const dmg = Math.round(kana * TUNING.wordBonusPerKana * mult * 1.25);
       enemyHpRef.current = Math.max(0, enemyHpRef.current - dmg);
       hitRef.current = Date.now();
-      sfx.wordDone();
+      strikeFeel(enemySpriteEl(), weak, crit);
       float(
         `${weak ? `弱点×${TUNING.weaknessMult}! ` : ""}${crit ? "会心! " : ""}${dmg}`,
         weak || crit ? "float-crit" : "float-dmg"
@@ -280,6 +310,7 @@ export function Tutorial({ onExit }: Props) {
       if (step === "attack") {
         if (enemyHpRef.current <= 0) {
           sfx.kill();
+          fx.explode(centerOf(enemySpriteEl()));
           advance(1300);
         } else {
           // 倒しきれなければ同じ敵にもう1語
@@ -313,10 +344,18 @@ export function Tutorial({ onExit }: Props) {
       if (!card || card.word.finished) return;
       // 回復ステップでは攻撃モードのままだと進まない（切り替えに気づいてもらう）
       if (card.word.input(ch)) {
-        sfx.type();
+        comboRef.current++;
+        sfx.type(comboRef.current);
+        // 本編と同じく、打鍵のたびに弾が飛ぶ（こうげきは敵へ、かいふくは自分へ）
+        if (card.kind === "genre") {
+          if (modeRef.current === "heal") fx.bolt(centerOf(wordCardEl()), centerOf(cardOf("me")), "#8be08b");
+          else fx.bolt(centerOf(wordCardEl()), centerOf(enemySpriteEl()), "#9be7ff");
+        }
         if (card.word.finished) onWordDone(card);
       } else {
+        comboRef.current = 0;
         sfx.miss();
+        fx.sparks(centerOf(wordCardEl()), "#f87171", 8, 0.25);
       }
       rerender();
     },
@@ -473,6 +512,27 @@ export function Tutorial({ onExit }: Props) {
             </div>
           )}
           <div className="tut-sum-row">
+            <span><PixelIcon name="trophy" /></span>
+            <span>
+              バトルのあとは <PixelIcon name="keyboard" />はやさ・<PixelIcon name="target" />せいかくさ・
+              <PixelIcon name="fire" />コンボ で ランクがつく
+              <span className="tut-grades">
+                {[...GRADE.ranks].reverse().map((r) => (
+                  <span key={r.id} className="tut-grade" style={{ "--grade-color": r.color } as CSSProperties}>
+                    <b>{r.id}</b>
+                    {r.min}てん〜
+                  </span>
+                ))}
+              </span>
+            </span>
+          </div>
+          <div className="tut-sum-row">
+            <span><PixelIcon name="sound" /></span>
+            <span>
+              おとの大きさは 画面右上の <PixelIcon name="sound" /> ボタンで <b>大 → 小 → なし</b> と切りかえられる
+            </span>
+          </div>
+          <div className="tut-sum-row">
             <span><PixelIcon name="skull" /></span>
             <span>
               トップの「うぉーろーど」は終わりなき戦い。{SURVIVAL.bossEvery}ウェーブごとにボス、
@@ -506,6 +566,7 @@ export function Tutorial({ onExit }: Props) {
             </span>
           ))}
         </div>
+        <SoundToggle />
         <button className="btn ghost tut-skip" onClick={onExit}>
           やめる
         </button>
@@ -523,7 +584,12 @@ export function Tutorial({ onExit }: Props) {
           <div
             className={`enemy-card ${enemyKind.boss ? "boss" : ""} targeted ${
               now - hitRef.current < 200 ? "hit" : ""
-            } ${enemyHpRef.current <= 0 ? "dead" : ""}`}
+            } ${enemyHpRef.current <= 0 ? "dead" : ""} ${tele ? "charging" : ""}`}
+            style={
+              tele
+                ? ({ "--charge": Math.min(1, (now - tele.at) / (tele.until - tele.at)) } as CSSProperties)
+                : undefined
+            }
           >
             <img
               className={`enemy-sprite ${enemyHpRef.current <= 0 ? "ko" : ""}`}
@@ -563,7 +629,7 @@ export function Tutorial({ onExit }: Props) {
 
       {/* 味方 */}
       <div className="party-area">
-        <div className="player-card me">
+        <div className="player-card me" data-pid="me">
           <div className="player-head">
             <img className="avatar" src={alienFor(0, myHpRef.current >= 60)} alt="" />
             <span className="player-role"><Px>{roleDef("attacker").icon}</Px></span>
@@ -579,7 +645,7 @@ export function Tutorial({ onExit }: Props) {
             {myHpRef.current}/{MAX_HP}
           </div>
         </div>
-        <div className={`player-card ${allyAliveRef.current ? "" : "downed"}`}>
+        <div className={`player-card ${allyAliveRef.current ? "" : "downed"}`} data-pid="ally">
           <div className="player-head">
             <img className="avatar" src={alienFor(1, allyAliveRef.current)} alt="" />
             <span className="player-role"><Px>{roleDef("healer").icon}</Px></span>

@@ -35,11 +35,15 @@ import {
   type GenreId,
 } from "../typing/words";
 import { sfx } from "../sfx";
+import { bgm } from "../bgm";
 import { fireAndForget } from "../net/store";
 import { alienFor, enAsset } from "../assets";
 import { TouchKeyboard, isTouchDevice } from "../ui/TouchKeyboard";
 import { WordReel, nextReelId, type ReelItem } from "../ui/WordReel";
 import { PixelIcon, Px } from "../ui/PixelIcon";
+import { centerOf, flashScreen, fx, lunge, punch, rattle } from "../ui/fx";
+import { guardReadyFeel, impactFeel, strikeFeel, unisonFeel } from "../ui/feel";
+import { SoundToggle } from "../ui/SoundToggle";
 
 const TOUCH = isTouchDevice();
 
@@ -77,6 +81,19 @@ interface FloatFx {
   cls: string;
   area: "enemy" | "self";
 }
+
+// コンボの熱さ（打鍵エフェクトの色・パネルの光り方が段階で変わる）
+const COMBO_TIERS = [10, 30, 60];
+const COMBO_COLORS = ["#9be7ff", "#ffd866", "#ff9f43", "#ff5fd2"];
+const comboTier = (combo: number) => COMBO_TIERS.filter((n) => combo >= n).length;
+/** コンボがこの数の倍数に届くたびに祝う */
+const COMBO_MILESTONE = 25;
+
+// エフェクトの発射元・着弾先（DOM から位置を拾う。state には持たない）
+const enemySpriteEl = (key: string) =>
+  document.querySelector(`.enemy-card[data-ekey="${key}"] .enemy-sprite`);
+const playerCardEl = (pid: string) => document.querySelector(`.player-card[data-pid="${pid}"]`);
+const wordCardEl = () => document.querySelector(".unison-card, .reel-card");
 
 let uidSeq = 0;
 const uid = () => `c${uidSeq++}`;
@@ -123,6 +140,13 @@ export function Battle({ session, state, onLeave }: Props) {
   // 予告が消えない／早く消えることがないよう、受信時刻＋猶予で持つ
   const teleLocalRef = useRef<Record<string, number>>({});
   const enemyHitAt = useRef<Record<string, number>>({});
+  const lungedRef = useRef<Set<string>>(new Set());
+  const [bossIntro, setBossIntro] = useState<string | null>(null);
+  const enemyAliveRef = useRef<Record<string, boolean>>({});
+  const playerAliveRef = useRef<Record<string, boolean>>({});
+  const unisonDoneRef = useRef<Record<string, boolean>>({});
+  const chainSeenRef = useRef(0);
+  const revivedByMeAt = useRef(0);
   const comboRef = useRef(0);
   // ばーさーかーのいかりスタック。計算はこのローカル値、RTDB は仲間に見せるためのミラー
   const furyRef = useRef(0);
@@ -215,6 +239,11 @@ export function Battle({ session, state, onLeave }: Props) {
         const targets = t.targets ?? [];
         const targetsMe =
           !isSpectator && (targets.length === 0 || targets.includes(room.myId));
+        // 全体攻撃（ボスのいかり爆発）は画面ごと赤く染めて知らせる
+        if (targets.length === 0) {
+          sfx.rage();
+          flashScreen("rage", 700);
+        }
         if (targetsMe && me?.alive) {
           const w = pickDefense();
           defenseCardsRef.current = [
@@ -227,7 +256,7 @@ export function Battle({ session, state, onLeave }: Props) {
               defended: false,
             },
           ];
-          sfx.warn();
+          sfx.charge();
           // 入力途中のワードがなければ防御カードに自動フォーカス
           // （打ちかけを中断させるとミス連発になるため、途中ならフォーカスは奪わない）
           const ac = activeCardRef.current;
@@ -270,13 +299,36 @@ export function Battle({ session, state, onLeave }: Props) {
         const mult = Room.takenMult(myself) * (card.defended ? 0.5 : 1);
         const dmg = Math.max(1, Math.round(baseDmg * mult));
         fireAndForget("被ダメージ適用", room.damageSelf(dmg));
-        sfx.hurt();
-        doShake();
+        impactFeel(playerCardEl(room.myId), card.defended);
+        if (!card.defended) doShake();
         addFloat(
           card.defended ? `🛡️-${dmg}` : `-${dmg}`,
           card.defended ? "float-guard" : "float-hurt",
           "self"
         );
+      }
+      // 敵の飛びかかり（自分が標的でなくても見える）。予告が自分の時計で満了した瞬間に1回だけ
+      for (const [id, ev] of Object.entries(s.events ?? {})) {
+        if (ev.type !== "telegraph" || lungedRef.current.has(id)) continue;
+        const t = ev as TelegraphEvent;
+        const at = teleLocalRef.current[id];
+        if (at === undefined || now < at) continue;
+        lungedRef.current.add(id);
+        if (!(s.enemies ?? {})[String(t.enemyIdx)]?.alive) continue;
+        const targets = (t.targets ?? []).length > 0 ? t.targets! : allPlayers(s).filter(([, p]) => p.alive).map(([pid]) => pid);
+        const pts = targets.map((pid) => centerOf(playerCardEl(pid))).filter((p) => p !== null);
+        if (pts.length === 0) continue;
+        const mid = { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts[0].y };
+        lunge(enemySpriteEl(String(t.enemyIdx)), mid);
+        sfx.enemyAttack();
+        // なかまの被弾（ガードしたかは相手にしか分からないので、白い衝撃だけ出す）
+        setTimeout(() => {
+          for (const pid of targets) {
+            if (pid === room.myId) continue;
+            fx.sparks(centerOf(playerCardEl(pid)), "#fecaca", 10, 0.32);
+            rattle(playerCardEl(pid));
+          }
+        }, 170);
       }
       if (changed) forceUpdate();
     }, 200);
@@ -336,6 +388,13 @@ export function Battle({ session, state, onLeave }: Props) {
     async (card: GenreCard, myself: PlayerState, s: RoomState) => {
       const kanaLen = card.word.kana.length;
       const crit = card.word.missCount === 0;
+      // 手応え（斬撃・音・のけぞり）は通信を待たずに出す。待つと打ち終わりから一拍おくれて気持ちよくない
+      if (mode === "attack") {
+        const enemy = (s.enemies ?? {})[targetKey];
+        if (enemy?.alive) {
+          strikeFeel(enemySpriteEl(targetKey), card.genre === enemy.weakness, crit);
+        }
+      }
       const chainCount = await room.registerChain();
       statsDelta.current.words++;
 
@@ -367,9 +426,6 @@ export function Battle({ session, state, onLeave }: Props) {
               room.pushEvent({ type: "info", text: `🎉 ${kind.win}`, at: Date.now() } as never)
             );
           }
-          if (killed) sfx.kill();
-          else if (crit) sfx.crit();
-          else sfx.wordDone();
           // ばーさーかー: ノーミスで打ち切るたびにいかりが1段上がる（次のワードから効く）
           if (crit && roleDef(myself.role).fury && furyRef.current < BERSERK.maxStacks) {
             const next = furyRef.current + 1;
@@ -395,6 +451,7 @@ export function Battle({ session, state, onLeave }: Props) {
           statsDelta.current.heal += amount;
           await room.healPlayer(target[0], amount);
           addFloat(`+${amount} ${target[1].name}`, "float-heal", "self");
+          fx.sparks(centerOf(playerCardEl(target[0])), "#8be08b", 14, 0.28);
           sfx.heal();
         }
       }
@@ -423,7 +480,7 @@ export function Battle({ session, state, onLeave }: Props) {
         card.defended = true;
         statsDelta.current.defended++;
         addFloat("ガードじゅんびOK!", "float-guard", "self");
-        sfx.wordDone();
+        guardReadyFeel(playerCardEl(room.myId));
         // ガード済みカードは攻撃が解決するまで残るので、リールを次のワードへ進めて手を止めさせない
         setActiveCardId(nextReelId(cardsRef.current, card.id));
         forceUpdate();
@@ -433,6 +490,7 @@ export function Battle({ session, state, onLeave }: Props) {
         // 仲間が alive になるまでは完了済みカードを見せておき、state 更新で自然に消える。
         // 失敗したら打ち直せるよう新しいワードに差し替える
         sfx.revive();
+        revivedByMeAt.current = Date.now();
         addFloat("⛑️ふっかつ！", "float-heal", "self");
         forceUpdate();
         room
@@ -476,9 +534,14 @@ export function Battle({ session, state, onLeave }: Props) {
 
       const ok = word.input(key);
       if (ok) {
-        sfx.type();
         comboRef.current++;
+        sfx.type(comboRef.current);
         setCombo(comboRef.current);
+        if (comboRef.current % COMBO_MILESTONE === 0) {
+          sfx.comboUp(comboRef.current / COMBO_MILESTONE - 1);
+          addFloat(`🔥${comboRef.current}コンボ!`, "float-fury", "self");
+          fx.sparks(centerOf(wordCardEl()), COMBO_COLORS[comboTier(comboRef.current)], 18, 0.4);
+        }
         statsDelta.current.typed++;
         statsDelta.current.maxCombo = Math.max(
           statsDelta.current.maxCombo,
@@ -490,8 +553,14 @@ export function Battle({ session, state, onLeave }: Props) {
             const m = Room.damageMult(myself, s, 1, 1, false, furyRef.current);
             pendingDmg.current += TUNING.keyDamage * m;
             enemyHitAt.current[targetKey] = Date.now();
+            fx.bolt(centerOf(wordCardEl()), centerOf(enemySpriteEl(targetKey)), COMBO_COLORS[comboTier(comboRef.current)]);
           } else {
             pendingHeal.current += TUNING.keyHeal * Room.healMult(myself);
+            // 回復が飛ぶ先 = いちばんHPが減っている仲間（定期フラッシュと同じ選び方）
+            const weakest = allPlayers(s)
+              .filter(([, p]) => p.alive)
+              .sort((a, b) => a[1].hp / a[1].maxHp - b[1].hp / b[1].maxHp)[0];
+            if (weakest) fx.bolt(centerOf(wordCardEl()), centerOf(playerCardEl(weakest[0])), "#8be08b");
           }
         }
         if (word.finished) {
@@ -504,6 +573,7 @@ export function Battle({ session, state, onLeave }: Props) {
         }
       } else {
         sfx.miss();
+        fx.sparks(centerOf(wordCardEl()), "#f87171", 8, 0.25);
         comboRef.current = 0;
         setCombo(0);
         statsDelta.current.miss++;
@@ -644,6 +714,120 @@ export function Battle({ session, state, onLeave }: Props) {
     return localAt > now && !!(state.enemies ?? {})[String(t.enemyIdx)]?.alive;
   }) as [string, TelegraphEvent][];
 
+  // ---------- 撃破の演出（だれが倒しても全員の画面で砕け散る）----------
+  useEffect(() => {
+    const prev = enemyAliveRef.current;
+    const next: Record<string, boolean> = {};
+    for (const [key, e] of Object.entries(state.enemies ?? {})) {
+      next[key] = e.alive;
+      if (prev[key] && !e.alive) {
+        const isBoss = !!ENEMY_KINDS[e.kind]?.boss;
+        fx.explode(centerOf(enemySpriteEl(key)), isBoss);
+        punch(document.querySelector(".battle-screen"), "screen");
+        if (isBoss) {
+          sfx.bossDown();
+          flashScreen("white", 900);
+          doShake();
+        } else {
+          sfx.kill();
+        }
+      }
+    }
+    enemyAliveRef.current = next;
+  }, [state.enemies, doShake]);
+
+  // ---------- なかまの気絶・そせい（だれが起こしても全員の画面で光の柱が立つ）----------
+  useEffect(() => {
+    const prev = playerAliveRef.current;
+    const next: Record<string, boolean> = {};
+    for (const [pid, p] of allPlayers(state)) {
+      next[pid] = p.alive;
+      if (prev[pid] === undefined || prev[pid] === p.alive) continue;
+      const card = playerCardEl(pid);
+      if (p.alive) {
+        fx.pillar(centerOf(card));
+        if (Date.now() - revivedByMeAt.current > 1500) sfx.revive(); // 自分が起こしたときは打ち終わりで鳴らし済み
+      } else {
+        sfx.down();
+        rattle(card);
+        fx.sparks(centerOf(card), "#9aa0b5", 20, 0.35);
+      }
+    }
+    playerAliveRef.current = next;
+  }, [state.players]);
+
+  // ---------- ユニゾン: 1人打ち終わるたびに音が積み上がり、成功で全員の一斉攻撃 ----------
+  useEffect(() => {
+    const done = state.unison?.active ? state.unison.done ?? {} : {};
+    const count = Object.keys(done).length;
+    for (const pid of Object.keys(done)) {
+      if (unisonDoneRef.current[pid]) continue;
+      sfx.unisonTick(count);
+      const at = centerOf(playerCardEl(pid));
+      fx.ring(at, "#ffd866", 70);
+      fx.sparks(at, "#ffd866", 12, 0.3);
+    }
+    unisonDoneRef.current = { ...done };
+  }, [state.unison]);
+  const unisonResult = state.unison?.result ?? "";
+  useEffect(() => {
+    if (unisonResult === "fail") sfx.unisonFail();
+    if (unisonResult !== "success") return;
+    const s = stateRef.current;
+    doShake();
+    // 一斉攻撃で倒れた敵はもう alive ではないので、そのときは直前まで居た全員に撃ち込む
+    const alive = aliveEnemies(s).map(([key]) => key);
+    const keys = alive.length > 0 ? alive : Object.keys(s.enemies ?? {});
+    unisonFeel(
+      allPlayers(s).filter(([, p]) => p.alive).map(([pid]) => playerCardEl(pid)),
+      keys.map((key) => enemySpriteEl(key))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unisonResult]);
+
+  // ---------- チェイン: つながるたびに音が上がる ----------
+  const chainCount = chainActive ? chain!.count : 0;
+  useEffect(() => {
+    if (chainCount >= 2 && chainCount > chainSeenRef.current) sfx.chain(chainCount);
+    chainSeenRef.current = chainCount;
+  }, [chainCount]);
+
+  // ---------- ボス登場のカットイン + BGM 切り替え ----------
+  const bossKind = boss ? boss[1].kind : "";
+  useEffect(() => {
+    if (!bossKind) return;
+    setBossIntro(bossKind);
+    sfx.bossIntro();
+    const tm = setTimeout(() => setBossIntro(null), 1900);
+    return () => clearTimeout(tm);
+  }, [bossKind]);
+  useEffect(() => {
+    bgm.play(bossKind ? "boss" : "battle");
+  }, [bossKind]);
+  useEffect(() => () => bgm.stop(), []);
+
+  // 照準線（敵 → 狙われている仲間）。位置は描くたびに DOM から拾うのでレイアウトが動いても追従する
+  const aimKey = telegraphs.map(([id]) => id).join(",");
+  useEffect(() => {
+    fx.setAims(
+      telegraphs.map(([id, t]) => {
+        const resolveAt = teleLocalRef.current[id] ?? t.resolveAt;
+        return {
+          from: () => centerOf(enemySpriteEl(String(t.enemyIdx))),
+          to: () => {
+            const s = stateRef.current;
+            const pids = (t.targets ?? []).length > 0 ? t.targets! : allPlayers(s).filter(([, p]) => p.alive).map(([pid]) => pid);
+            return pids.map((pid) => centerOf(playerCardEl(pid)));
+          },
+          at: resolveAt - Math.max(1, t.resolveAt - t.at),
+          resolveAt,
+        };
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aimKey]);
+  useEffect(() => () => fx.setAims([]), []);
+
   const infoEvents = Object.entries(state.events ?? {})
     .filter(([, ev]) => ev.type === "info" && now - ev.at < 4000)
     .map(([, ev]) => ev as { text: string; at: number })
@@ -726,6 +910,7 @@ export function Battle({ session, state, onLeave }: Props) {
             <PixelIcon name="sparkle" />ユニゾン
           </button>
         </div>
+        <SoundToggle />
         {!isSpectator && (
           <button
             className="btn ghost giveup-btn"
@@ -748,13 +933,13 @@ export function Battle({ session, state, onLeave }: Props) {
       {/* ---- バナー ---- */}
       <div className="banner-feed">
         {chainActive && (
-          <div className="banner chain-banner">
+          <div key={chain!.count} className={`banner chain-banner chain-tier-${Math.min(3, Math.floor(chain!.count / 5))}`}>
             <PixelIcon name="chain" /> {chain!.count} CHAIN! 火力+
             {Math.round(Math.min(TUNING.chainBonusMax, (chain!.count - 1) * TUNING.chainBonusPer) * 100)}%
           </div>
         )}
         {buffActive && (
-          <div className="banner buff-banner"><PixelIcon name="trumpet" /> おうえん中！ チーム火力+20%</div>
+          <div className="banner buff-banner"><PixelIcon name="trumpet" /> おうえん中！ チーム火力+{Math.round((TUNING.buffMult - 1) * 100)}%</div>
         )}
         {infoEvents.map((ev, i) => (
           <div key={ev.at + i} className="banner info-banner">
@@ -781,7 +966,16 @@ export function Battle({ session, state, onLeave }: Props) {
                 e.alive ? "" : "dead",
                 key === targetKey ? "targeted" : "",
                 hitRecently ? "hit" : "",
+                tele ? "charging" : "",
               ].join(" ")}
+              data-ekey={key}
+              style={
+                tele
+                  ? ({
+                      "--charge": Math.min(1, Math.max(0, 1 - (teleAt - now) / Math.max(1, tele[1].resolveAt - tele[1].at))),
+                    } as CSSProperties)
+                  : undefined
+              }
               onClick={() => e.alive && setTargetKey(key)}
               disabled={!e.alive}
             >
@@ -857,6 +1051,7 @@ export function Battle({ session, state, onLeave }: Props) {
                 pl.alive ? "" : "downed",
                 targeted ? "in-danger" : "",
               ].join(" ")}
+              data-pid={pid}
             >
               <div className="player-head">
                 <img
@@ -900,7 +1095,7 @@ export function Battle({ session, state, onLeave }: Props) {
 
       {/* ---- タイピングパネル ---- */}
       {!isSpectator && me && (
-        <div className={`typing-panel ${missFlash ? "miss-flash" : ""}`}>
+        <div className={`typing-panel heat-${comboTier(combo)} ${missFlash ? "miss-flash" : ""}`}>
           {!me.alive ? (
             <div className="downed-overlay">
               <div className="downed-msg"><PixelIcon name="dizzy" /> きぜつしてしまった…</div>
@@ -999,7 +1194,7 @@ export function Battle({ session, state, onLeave }: Props) {
                 })}
               />
               <div className="stat-row">
-                <span className={`combo ${combo >= 10 ? "hot" : ""}`}>
+                <span className={`combo ${combo >= 10 ? "hot" : ""} tier-${comboTier(combo)}`}>
                   <PixelIcon name="fire" />コンボ {combo}
                 </span>
                 <span><PixelIcon name="keyboard" /> {kpm} 打/分</span>
@@ -1032,6 +1227,25 @@ export function Battle({ session, state, onLeave }: Props) {
           <button className="btn ghost" onClick={onLeave}>
             観戦をやめる
           </button>
+        </div>
+      )}
+
+      {bossIntro && ENEMY_KINDS[bossIntro] && (
+        <div className="boss-cutin" aria-hidden="true">
+          <div className="cutin-band">
+            <span className="cutin-warn">WARNING</span>
+            <img
+              src={enAsset(ENEMY_KINDS[bossIntro].sprite)}
+              alt=""
+              draggable={false}
+              style={ENEMY_KINDS[bossIntro].tint ? { filter: ENEMY_KINDS[bossIntro].tint } : undefined}
+            />
+            <span className="cutin-name">
+              <PixelIcon name="crown" />
+              {ENEMY_KINDS[bossIntro].name}
+            </span>
+            <span className="cutin-warn">WARNING</span>
+          </div>
         </div>
       )}
 

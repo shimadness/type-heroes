@@ -4,6 +4,7 @@ import App from "./App";
 import "./styles.css";
 import { initAnalytics } from "./analytics";
 import { PixelIcon } from "./ui/PixelIcon";
+import { FxCanvas } from "./ui/fx";
 
 initAnalytics();
 
@@ -42,6 +43,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <App />
+      <FxCanvas />
     </ErrorBoundary>
   </React.StrictMode>
 );

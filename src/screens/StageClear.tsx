@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { Session } from "../App";
 import type { RoomState } from "../game/types";
 import { ENEMY_KINDS, EQUIPS, STAGES, equipDef, recommendEquip, roleDef } from "../game/data";
@@ -7,6 +7,7 @@ import { fireAndForget } from "../net/store";
 import { HostBrain } from "../game/host";
 import { allPlayers } from "../game/room";
 import { PixelIcon, Px } from "../ui/PixelIcon";
+import { sfx } from "../sfx";
 
 interface Props {
   session: Session;
@@ -29,6 +30,9 @@ export function StageClear({ session, state }: Props) {
     [room.myId, state.meta.stageIdx]
   );
   const canPick = !!me && !room.spectator;
+  useEffect(() => {
+    sfx.stageClear();
+  }, []);
 
   return (
     <div className="screen center stageclear-screen" style={{ background: stage.bg }}>

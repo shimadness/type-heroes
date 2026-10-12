@@ -1,9 +1,18 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JoinProfile } from "../game/room";
 import { SURVIVAL, type TeamDifficulty } from "../game/data";
 import type { GameMode } from "../game/types";
 import { alienFor, enAsset } from "../assets";
 import { PixelIcon } from "../ui/PixelIcon";
+import { TypingWord } from "../typing/romaji";
+import { isTouchDevice } from "../ui/TouchKeyboard";
+import { sfx } from "../sfx";
+import { centerOf, flashScreen, fx } from "../ui/fx";
+
+// タイトルでそのまま打てるワード。打ち切ると「ひとりでしゅぎょう」が始まる
+// （メニューを読む前に、まず1回打つ気持ちよさを味わってもらう入口）
+const START_WORDS = ["ぼうけんにでる", "いざしゅっぱつ", "たたかいのはじまり"];
+const TOUCH = isTouchDevice();
 
 interface Props {
   error: string;
@@ -40,6 +49,40 @@ export function Title(p: Props) {
     return { name: name || "ゆうしゃ", role: "attacker", diff };
   };
 
+  // ---- タイトルで打つとそのまま始まる ----
+  const startWord = useMemo(() => {
+    const w = START_WORDS[Math.floor(Math.random() * START_WORDS.length)];
+    return new TypingWord(w, w);
+  }, []);
+  const [, setTyped] = useState(0);
+  const launching = useRef(false);
+  useEffect(() => {
+    if (TOUCH || mode !== "menu") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || launching.current) return;
+      if (!/^[a-z\-]$/i.test(e.key)) return;
+      e.preventDefault();
+      const boss = document.querySelector(".parade-boss");
+      if (startWord.input(e.key)) {
+        sfx.type(startWord.typedCount * 3);
+        fx.bolt(centerOf(document.querySelector(".start-word")), centerOf(boss), "#ffd866");
+        if (startWord.finished) {
+          launching.current = true;
+          sfx.kill();
+          fx.explode(centerOf(boss), true);
+          flashScreen("white", 500);
+          setTimeout(() => go(() => p.onSolo(profile(), diff, "story")), 550);
+        }
+      } else {
+        sfx.miss();
+      }
+      setTyped((n) => n + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, startWord]);
+
   const go = async (fn: () => void) => {
     setBusy(true);
     try {
@@ -64,6 +107,22 @@ export function Title(p: Props) {
           <img src={enAsset("mon-legacydragon")} alt="" draggable={false} className="parade-boss" />
         </div>
       </div>
+
+      {mode === "menu" && !TOUCH && (
+        <div className={`start-word ${startWord.typedCount > 0 ? "typing" : ""}`}>
+          <div className="start-hint">
+            <PixelIcon name="keyboard" /> キーボードで うつと すぐ はじまる
+          </div>
+          <div className="card-jp">{startWord.display}</div>
+          <div className="card-romaji">
+            <span className="typed">{startWord.romajiParts()[0]}</span>
+            <span className="rest">{startWord.romajiParts()[1]}</span>
+          </div>
+          <div className="bar word-progress">
+            <div className="bar-fill word-progress-fill" style={{ width: `${startWord.progress() * 100}%` }} />
+          </div>
+        </div>
+      )}
 
       {mode === "menu" && (
         <div className="menu-buttons">

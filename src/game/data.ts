@@ -359,6 +359,24 @@ void _assertWordDiffsAreTeamDiffs;
 
 export const PLAYER_MAX_HP = 100;
 
+// ---- 成績ランク（結果画面の個人スコア。0〜100点）----
+// はやさ・せいかくさ・コンボの3つを足す。勝ち負けやロールに左右されない「自分のタイピング」だけの点数
+export const GRADE = {
+  speedPts: 45, // はやさの満点
+  speedFullKpm: 300, // この打鍵/分で満点
+  accPts: 35, // せいかくさの満点
+  accFloor: 80, // この正確率(%)以下は0点。100%で満点
+  comboPts: 20, // コンボの満点
+  comboFull: 100, // この最大コンボで満点
+  // 上から順に判定（min 点以上でそのランク）
+  ranks: [
+    { id: "S", min: 85, color: "#ffd866" },
+    { id: "A", min: 70, color: "#ff9f43" },
+    { id: "B", min: 50, color: "#6ec6ff" },
+    { id: "C", min: 0, color: "#9aa0b5" },
+  ],
+} as const;
+
 // ---- ダメージ計算パラメータ ----
 export const TUNING = {
   keyDamage: 1, // 1打鍵ごとの基礎ダメージ

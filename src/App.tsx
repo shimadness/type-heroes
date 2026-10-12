@@ -30,6 +30,17 @@ function friendlyError(e: unknown): string {
   return msg;
 }
 
+/**
+ * マルチプレイ用のストア。ふだんは RTDB。
+ * 撮影ツール（tools/xclip）は window.__thNetStore を差し込んで、本番DBに触れずに複数人プレイを録る
+ */
+async function netStore(): Promise<Store> {
+  const injected = (window as unknown as { __thNetStore?: Store }).__thNetStore;
+  if (injected) return injected;
+  const { FirebaseStore } = await import("./net/store");
+  return new FirebaseStore();
+}
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [showRanking, setShowRanking] = useState(false);
@@ -55,8 +66,7 @@ export default function App() {
   const createRoom = useCallback(
     async (pw: string, profile: JoinProfile, teamDiff: TeamDifficulty, mode: GameMode) => {
       try {
-        const { FirebaseStore } = await import("./net/store");
-        const store = new FirebaseStore();
+        const store = await netStore();
         const code = sanitizeRoomCode(pw);
         if (code.length < 3) throw new Error("あいことばは3文字以上にしてね");
         // 「使用中」＝いまも遊んでいる人がいる部屋だけ。
@@ -77,8 +87,7 @@ export default function App() {
 
   const joinRoom = useCallback(async (pw: string, profile: JoinProfile) => {
     try {
-      const { FirebaseStore } = await import("./net/store");
-      const store = new FirebaseStore();
+      const store = await netStore();
       const code = sanitizeRoomCode(pw);
       const room = await Room.join(store, code, profile);
       trackPlayStart("join");
@@ -91,8 +100,7 @@ export default function App() {
 
   const spectateRoom = useCallback(async (pw: string) => {
     try {
-      const { FirebaseStore } = await import("./net/store");
-      const store = new FirebaseStore();
+      const store = await netStore();
       const code = sanitizeRoomCode(pw);
       const room = await Room.spectate(store, code);
       trackPlayStart("spectate");

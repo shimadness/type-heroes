@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Store } from "./net/store";
-import { LocalStore } from "./net/store";
+import { LocalStore, fireAndForget } from "./net/store";
 import { Room, allPlayers, sanitizeRoomCode } from "./game/room";
 import type { JoinProfile } from "./game/room";
 import type { TeamDifficulty } from "./game/data";
 import type { GameMode } from "./game/types";
+import { rememberRoom, removeRoomIfEmpty, sweepOldRooms } from "./game/roomCleanup";
 import { useRoom } from "./hooks/useRoom";
 import { Title } from "./screens/Title";
 import { Lobby } from "./screens/Lobby";
@@ -76,6 +77,8 @@ export default function App() {
         }
         const room = await Room.create(store, code, profile, teamDiff, mode);
         trackPlayStart("create");
+        rememberRoom(code);
+        fireAndForget("古い部屋の掃除", sweepOldRooms(store, code));
         setSession({ store, room, isLocal: false });
         setError("");
       } catch (e) {
@@ -91,6 +94,8 @@ export default function App() {
       const code = sanitizeRoomCode(pw);
       const room = await Room.join(store, code, profile);
       trackPlayStart("join");
+      rememberRoom(code);
+      fireAndForget("古い部屋の掃除", sweepOldRooms(store, code));
       setSession({ store, room, isLocal: false });
       setError("");
     } catch (e) {
@@ -112,7 +117,13 @@ export default function App() {
   }, []);
 
   const leaveRoom = useCallback(() => {
-    session?.room.leave();
+    if (session) {
+      const { room, store, isLocal } = session;
+      room
+        .leave()
+        .then(() => (isLocal || room.spectator ? undefined : removeRoomIfEmpty(store, room.code)))
+        .catch((e) => console.warn("[TYPE HEROES] 空き部屋の削除に失敗", e));
+    }
     setSession(null);
   }, [session]);
 
